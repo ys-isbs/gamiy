@@ -2,34 +2,13 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>神経衰弱ゲーム</title>
+  <title>間違い探しゲーム</title>
   <style>
     body { text-align: center; font-family: Arial, sans-serif; background-color: #f0f0f0; }
     h1 { margin-top: 20px; }
-    #gameBoard { width: 640px; margin: 20px auto; display: flex; flex-wrap: wrap; }
-    .card {
-      width: 150px;
-      height: 150px;
-      margin: 10px;
-      background-color: #007BFF;
-      color: white;
-      font-size: 100px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      border-radius: 10px;
-      user-select: none;
-    }
-    .matched {
-      background-color: #28a745;
-      cursor: default;
-    }
-    .flipped {
-      background-color: #ffffff;
-      color: #000;
-    }
-    #score { font-size: 24px; margin-top: 20px; }
+    #gameArea { position: relative; width: 800px; height: 600px; margin: 20px auto; }
+    canvas { border: 1px solid #000; margin: 10px; }
+    #message { font-size: 24px; margin-top: 20px; }
     #restartButton {
       padding: 10px 20px;
       font-size: 18px;
@@ -38,97 +17,142 @@
   </style>
 </head>
 <body>
-  <h1>神経衰弱ゲーム</h1>
-  <div id="gameBoard"></div>
-  <div id="score">試行回数: 0</div>
+  <h1>間違い探しゲーム</h1>
+  <div id="gameArea">
+    <canvas id="canvas1" width="350" height="500"></canvas>
+    <canvas id="canvas2" width="350" height="500"></canvas>
+  </div>
+  <p id="message">見つけた間違いの数: 0 / 5</p>
   <button id="restartButton">再スタート</button>
   <script>
-    const symbols = ['🍎', '🍌', '🍇', '🍓', '🍍', '🍒', '🥝', '🍑'];
-    let cards = [];
-    let flippedCards = [];
-    let matchedCount = 0;
-    let attempts = 0;
-    const gameBoard = document.getElementById('gameBoard');
-    const scoreDisplay = document.getElementById('score');
+    const canvas1 = document.getElementById('canvas1');
+    const canvas2 = document.getElementById('canvas2');
+    const ctx1 = canvas1.getContext('2d');
+    const ctx2 = canvas2.getContext('2d');
+    const message = document.getElementById('message');
     const restartButton = document.getElementById('restartButton');
 
-    function initGame() {
-      gameBoard.innerHTML = '';
-      attempts = 0;
-      matchedCount = 0;
-      scoreDisplay.textContent = '試行回数: 0';
-      cards = createCards();
-      shuffle(cards);
-      cards.forEach(card => {
-        gameBoard.appendChild(card.element);
-      });
+    let differences = [];
+    let foundDifferences = 0;
+
+    function drawImages() {
+      // シンプルな図形で画像を描画
+      drawScene(ctx1);
+      drawScene(ctx2);
+
+      // 差分を作成
+      differences = generateDifferences(ctx2);
     }
 
-    function createCards() {
-      const cardArray = [];
-      symbols.forEach(symbol => {
-        for (let i = 0; i < 2; i++) {
-          const card = {
-            symbol: symbol,
-            element: document.createElement('div'),
-            matched: false,
-          };
-          card.element.classList.add('card');
-          card.element.addEventListener('click', () => flipCard(card));
-          cardArray.push(card);
+    function drawScene(ctx) {
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, 350, 500);
+
+      // 木
+      ctx.fillStyle = '#8B4513';
+      ctx.fillRect(150, 300, 50, 150);
+      ctx.fillStyle = '#228B22';
+      ctx.beginPath();
+      ctx.arc(175, 300, 80, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 太陽
+      ctx.fillStyle = '#FFD700';
+      ctx.beginPath();
+      ctx.arc(300, 80, 40, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 家
+      ctx.fillStyle = '#A0522D';
+      ctx.fillRect(50, 250, 100, 100);
+      ctx.fillStyle = '#8B0000';
+      ctx.beginPath();
+      ctx.moveTo(50, 250);
+      ctx.lineTo(100, 200);
+      ctx.lineTo(150, 250);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    function generateDifferences(ctx) {
+      const diffs = [];
+
+      // 差分1: 太陽を削除
+      ctx.clearRect(260, 40, 80, 80);
+      diffs.push({ x: 260, y: 40, width: 80, height: 80 });
+
+      // 差分2: 木の葉の色を変える
+      ctx.fillStyle = '#FF4500';
+      ctx.beginPath();
+      ctx.arc(175, 300, 80, 0, Math.PI * 2);
+      ctx.fill();
+      diffs.push({ x: 95, y: 220, width: 160, height: 160 });
+
+      // 差分3: 家のドアを追加
+      ctx.fillStyle = '#000';
+      ctx.fillRect(90, 300, 20, 50);
+      diffs.push({ x: 90, y: 300, width: 20, height: 50 });
+
+      // 差分4: 雲を追加
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      ctx.arc(80, 80, 20, 0, Math.PI * 2);
+      ctx.arc(100, 80, 30, 0, Math.PI * 2);
+      ctx.arc(130, 80, 20, 0, Math.PI * 2);
+      ctx.fill();
+      diffs.push({ x: 60, y: 50, width: 80, height: 60 });
+
+      // 差分5: 花を追加
+      ctx.fillStyle = '#FF1493';
+      ctx.beginPath();
+      ctx.arc(250, 450, 10, 0, Math.PI * 2);
+      ctx.fill();
+      diffs.push({ x: 240, y: 440, width: 20, height: 20 });
+
+      return diffs;
+    }
+
+    function checkDifference(e) {
+      const rect = canvas2.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+
+      for (let i = 0; i < differences.length; i++) {
+        const diff = differences[i];
+        if (
+          x >= diff.x &&
+          x <= diff.x + diff.width &&
+          y >= diff.y &&
+          y <= diff.y + diff.height
+        ) {
+          // 見つけた差分をマーク
+          ctx2.strokeStyle = 'red';
+          ctx2.lineWidth = 5;
+          ctx2.strokeRect(diff.x, diff.y, diff.width, diff.height);
+          differences.splice(i, 1);
+          foundDifferences++;
+          message.textContent = `見つけた間違いの数: ${foundDifferences} / 5`;
+          if (foundDifferences === 5) {
+            setTimeout(() => {
+              alert('おめでとうございます！全ての間違いを見つけました！');
+            }, 100);
+          }
+          break;
         }
-      });
-      return cardArray;
-    }
-
-    function shuffle(array) {
-      for (let i = array.length -1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i+1));
-        [array[i], array[j]] = [array[j], array[i]];
       }
     }
 
-    function flipCard(card) {
-      if (flippedCards.length < 2 && !card.matched && !flippedCards.includes(card)) {
-        card.element.classList.add('flipped');
-        card.element.textContent = card.symbol;
-        flippedCards.push(card);
-        if (flippedCards.length === 2) {
-          attempts++;
-          scoreDisplay.textContent = '試行回数: ' + attempts;
-          checkForMatch();
-        }
-      }
-    }
+    canvas2.addEventListener('click', checkDifference);
 
-    function checkForMatch() {
-      const [card1, card2] = flippedCards;
-      if (card1.symbol === card2.symbol) {
-        card1.matched = true;
-        card2.matched = true;
-        card1.element.classList.add('matched');
-        card2.element.classList.add('matched');
-        flippedCards = [];
-        matchedCount++;
-        if (matchedCount === symbols.length) {
-          setTimeout(() => {
-            alert('ゲームクリア！試行回数: ' + attempts);
-          }, 500);
-        }
-      } else {
-        setTimeout(() => {
-          card1.element.classList.remove('flipped');
-          card2.element.classList.remove('flipped');
-          card1.element.textContent = '';
-          card2.element.textContent = '';
-          flippedCards = [];
-        }, 1000);
-      }
-    }
+    restartButton.addEventListener('click', () => {
+      ctx1.clearRect(0, 0, canvas1.width, canvas1.height);
+      ctx2.clearRect(0, 0, canvas2.width, canvas2.height);
+      foundDifferences = 0;
+      message.textContent = '見つけた間違いの数: 0 / 5';
+      drawImages();
+    });
 
-    restartButton.addEventListener('click', initGame);
-
-    initGame();
+    drawImages();
   </script>
 </body>
 </html>
