@@ -2,157 +2,197 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>間違い探しゲーム</title>
+  <title>落ち物パズルゲーム</title>
   <style>
-    body { text-align: center; font-family: Arial, sans-serif; background-color: #f0f0f0; }
-    h1 { margin-top: 20px; }
-    #gameArea { position: relative; width: 800px; height: 600px; margin: 20px auto; }
-    canvas { border: 1px solid #000; margin: 10px; }
-    #message { font-size: 24px; margin-top: 20px; }
-    #restartButton {
-      padding: 10px 20px;
-      font-size: 18px;
-      margin-top: 20px;
-    }
+    body { text-align: center; font-family: Arial, sans-serif; background-color: #222; color: #fff; }
+    #gameArea { position: relative; width: 300px; height: 600px; margin: 20px auto; background-color: #000; overflow: hidden; border: 2px solid #fff; }
+    #score { font-size: 24px; margin-top: 10px; }
+    #startButton { padding: 10px 20px; font-size: 18px; margin-top: 10px; }
+    canvas { display: block; margin: 0 auto; background-color: #000; }
   </style>
 </head>
 <body>
-  <h1>間違い探しゲーム</h1>
+  <h1>落ち物パズルゲーム</h1>
   <div id="gameArea">
-    <canvas id="canvas1" width="350" height="500"></canvas>
-    <canvas id="canvas2" width="350" height="500"></canvas>
+    <canvas id="gameCanvas" width="300" height="600"></canvas>
   </div>
-  <p id="message">見つけた間違いの数: 0 / 5</p>
-  <button id="restartButton">再スタート</button>
+  <div id="score">スコア: 0</div>
+  <button id="startButton">ゲーム開始</button>
   <script>
-    const canvas1 = document.getElementById('canvas1');
-    const canvas2 = document.getElementById('canvas2');
-    const ctx1 = canvas1.getContext('2d');
-    const ctx2 = canvas2.getContext('2d');
-    const message = document.getElementById('message');
-    const restartButton = document.getElementById('restartButton');
+    const canvas = document.getElementById('gameCanvas');
+    const context = canvas.getContext('2d');
+    const startButton = document.getElementById('startButton');
+    const scoreDisplay = document.getElementById('score');
+    const blockSize = 30;
+    const rows = 20;
+    const cols = 10;
+    let board = [];
+    let currentPiece;
+    let gameInterval;
+    let score = 0;
 
-    let differences = [];
-    let foundDifferences = 0;
+    // ブロックの形状
+    const pieces = [
+      [[1, 1, 1, 1]], // I
+      [[1, 1], [1, 1]], // O
+      [[0, 1, 0], [1, 1, 1]], // T
+      [[1, 0, 0], [1, 1, 1]], // L
+      [[0, 0, 1], [1, 1, 1]], // J
+      [[0, 1, 1], [1, 1, 0]], // S
+      [[1, 1, 0], [0, 1, 1]], // Z
+    ];
 
-    function drawImages() {
-      // シンプルな図形で画像を描画
-      drawScene(ctx1);
-      drawScene(ctx2);
+    // 色の設定
+    const colors = ['cyan', 'yellow', 'purple', 'orange', 'blue', 'green', 'red'];
 
-      // 差分を作成
-      differences = generateDifferences(ctx2);
-    }
-
-    function drawScene(ctx) {
-      ctx.fillStyle = '#fff';
-      ctx.fillRect(0, 0, 350, 500);
-
-      // 木
-      ctx.fillStyle = '#8B4513';
-      ctx.fillRect(150, 300, 50, 150);
-      ctx.fillStyle = '#228B22';
-      ctx.beginPath();
-      ctx.arc(175, 300, 80, 0, Math.PI * 2);
-      ctx.fill();
-
-      // 太陽
-      ctx.fillStyle = '#FFD700';
-      ctx.beginPath();
-      ctx.arc(300, 80, 40, 0, Math.PI * 2);
-      ctx.fill();
-
-      // 家
-      ctx.fillStyle = '#A0522D';
-      ctx.fillRect(50, 250, 100, 100);
-      ctx.fillStyle = '#8B0000';
-      ctx.beginPath();
-      ctx.moveTo(50, 250);
-      ctx.lineTo(100, 200);
-      ctx.lineTo(150, 250);
-      ctx.closePath();
-      ctx.fill();
-    }
-
-    function generateDifferences(ctx) {
-      const diffs = [];
-
-      // 差分1: 太陽を削除
-      ctx.clearRect(260, 40, 80, 80);
-      diffs.push({ x: 260, y: 40, width: 80, height: 80 });
-
-      // 差分2: 木の葉の色を変える
-      ctx.fillStyle = '#FF4500';
-      ctx.beginPath();
-      ctx.arc(175, 300, 80, 0, Math.PI * 2);
-      ctx.fill();
-      diffs.push({ x: 95, y: 220, width: 160, height: 160 });
-
-      // 差分3: 家のドアを追加
-      ctx.fillStyle = '#000';
-      ctx.fillRect(90, 300, 20, 50);
-      diffs.push({ x: 90, y: 300, width: 20, height: 50 });
-
-      // 差分4: 雲を追加
-      ctx.fillStyle = '#fff';
-      ctx.beginPath();
-      ctx.arc(80, 80, 20, 0, Math.PI * 2);
-      ctx.arc(100, 80, 30, 0, Math.PI * 2);
-      ctx.arc(130, 80, 20, 0, Math.PI * 2);
-      ctx.fill();
-      diffs.push({ x: 60, y: 50, width: 80, height: 60 });
-
-      // 差分5: 花を追加
-      ctx.fillStyle = '#FF1493';
-      ctx.beginPath();
-      ctx.arc(250, 450, 10, 0, Math.PI * 2);
-      ctx.fill();
-      diffs.push({ x: 240, y: 440, width: 20, height: 20 });
-
-      return diffs;
-    }
-
-    function checkDifference(e) {
-      const rect = canvas2.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
-
-      for (let i = 0; i < differences.length; i++) {
-        const diff = differences[i];
-        if (
-          x >= diff.x &&
-          x <= diff.x + diff.width &&
-          y >= diff.y &&
-          y <= diff.y + diff.height
-        ) {
-          // 見つけた差分をマーク
-          ctx2.strokeStyle = 'red';
-          ctx2.lineWidth = 5;
-          ctx2.strokeRect(diff.x, diff.y, diff.width, diff.height);
-          differences.splice(i, 1);
-          foundDifferences++;
-          message.textContent = `見つけた間違いの数: ${foundDifferences} / 5`;
-          if (foundDifferences === 5) {
-            setTimeout(() => {
-              alert('おめでとうございます！全ての間違いを見つけました！');
-            }, 100);
-          }
-          break;
+    function initBoard() {
+      board = [];
+      for (let r = 0; r < rows; r++) {
+        board[r] = [];
+        for (let c = 0; c < cols; c++) {
+          board[r][c] = null;
         }
       }
     }
 
-    canvas2.addEventListener('click', checkDifference);
+    function drawBoard() {
+      context.clearRect(0, 0, canvas.width, canvas.height);
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          if (board[r][c]) {
+            context.fillStyle = board[r][c];
+            context.fillRect(c * blockSize, r * blockSize, blockSize, blockSize);
+            context.strokeStyle = '#000';
+            context.strokeRect(c * blockSize, r * blockSize, blockSize, blockSize);
+          }
+        }
+      }
+      if (currentPiece) {
+        drawPiece(currentPiece);
+      }
+    }
 
-    restartButton.addEventListener('click', () => {
-      ctx1.clearRect(0, 0, canvas1.width, canvas1.height);
-      ctx2.clearRect(0, 0, canvas2.width, canvas2.height);
-      foundDifferences = 0;
-      message.textContent = '見つけた間違いの数: 0 / 5';
-      drawImages();
+    function drawPiece(piece) {
+      context.fillStyle = piece.color;
+      for (let r = 0; r < piece.shape.length; r++) {
+        for (let c = 0; c < piece.shape[r].length; c++) {
+          if (piece.shape[r][c]) {
+            context.fillRect((piece.x + c) * blockSize, (piece.y + r) * blockSize, blockSize, blockSize);
+            context.strokeStyle = '#000';
+            context.strokeRect((piece.x + c) * blockSize, (piece.y + r) * blockSize, blockSize, blockSize);
+          }
+        }
+      }
+    }
+
+    function createPiece() {
+      const index = Math.floor(Math.random() * pieces.length);
+      const shape = pieces[index];
+      const color = colors[index];
+      const x = Math.floor(cols / 2) - Math.floor(shape[0].length / 2);
+      const y = -shape.length;
+      return { shape, color, x, y };
+    }
+
+    function movePiece(dx, dy) {
+      if (!collision(currentPiece.shape, currentPiece.x + dx, currentPiece.y + dy)) {
+        currentPiece.x += dx;
+        currentPiece.y += dy;
+        drawBoard();
+        return true;
+      }
+      return false;
+    }
+
+    function rotatePiece() {
+      const rotatedShape = currentPiece.shape[0].map((val, index) =>
+        currentPiece.shape.map(row => row[index]).reverse()
+      );
+      if (!collision(rotatedShape, currentPiece.x, currentPiece.y)) {
+        currentPiece.shape = rotatedShape;
+        drawBoard();
+      }
+    }
+
+    function collision(shape, x, y) {
+      for (let r = 0; r < shape.length; r++) {
+        for (let c = 0; c < shape[r].length; c++) {
+          if (shape[r][c]) {
+            const newX = x + c;
+            const newY = y + r;
+            if (newX < 0 || newX >= cols || newY >= rows || (newY >= 0 && board[newY][newX])) {
+              return true;
+            }
+          }
+        }
+      }
+      return false;
+    }
+
+    function freezePiece() {
+      for (let r = 0; r < currentPiece.shape.length; r++) {
+        for (let c = 0; c < currentPiece.shape[r].length; c++) {
+          if (currentPiece.shape[r][c]) {
+            const x = currentPiece.x + c;
+            const y = currentPiece.y + r;
+            if (y >= 0) {
+              board[y][x] = currentPiece.color;
+            } else {
+              // ゲームオーバー
+              clearInterval(gameInterval);
+              alert('ゲームオーバー');
+              startButton.disabled = false;
+              return;
+            }
+          }
+        }
+      }
+      clearLines();
+      currentPiece = createPiece();
+    }
+
+    function clearLines() {
+      for (let r = rows - 1; r >= 0; r--) {
+        if (board[r].every(cell => cell)) {
+          board.splice(r, 1);
+          board.unshift(Array(cols).fill(null));
+          score += 10;
+          scoreDisplay.textContent = 'スコア: ' + score;
+          r++;
+        }
+      }
+    }
+
+    function gameLoop() {
+      if (!movePiece(0, 1)) {
+        freezePiece();
+      }
+      drawBoard();
+    }
+
+    function startGame() {
+      initBoard();
+      score = 0;
+      scoreDisplay.textContent = 'スコア: 0';
+      currentPiece = createPiece();
+      drawBoard();
+      startButton.disabled = true;
+      gameInterval = setInterval(gameLoop, 500);
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowLeft') {
+        movePiece(-1, 0);
+      } else if (e.key === 'ArrowRight') {
+        movePiece(1, 0);
+      } else if (e.key === 'ArrowDown') {
+        movePiece(0, 1);
+      } else if (e.key === 'ArrowUp') {
+        rotatePiece();
+      }
     });
 
-    drawImages();
+    startButton.addEventListener('click', startGame);
   </script>
 </body>
 </html>
