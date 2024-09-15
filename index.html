@@ -2,238 +2,53 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>七並べゲーム</title>
+  <title>じゃんけんゲーム</title>
   <style>
     body { text-align: center; font-family: Arial, sans-serif; }
-    h1 { margin-top: 20px; }
-    #gameArea { display: flex; justify-content: center; flex-wrap: wrap; margin: 20px; }
-    .card {
-      width: 60px;
-      height: 90px;
-      border: 1px solid #000;
-      border-radius: 5px;
-      margin: 3px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 18px;
-      cursor: pointer;
-      background-color: #fff;
-    }
-    .played {
-      background-color: #ccc;
-      cursor: default;
-    }
-    .hidden {
-      background-color: #eee;
-      cursor: default;
-    }
-    #playerHand, #tableCards, #computerHand {
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: center;
-      margin: 10px;
-    }
-    #message { font-size: 18px; margin: 10px; }
-    #startButton {
+    h1 { margin-top: 50px; }
+    #result { font-size: 24px; margin: 20px; }
+    #choices button {
       padding: 10px 20px;
       font-size: 18px;
-      margin-top: 10px;
+      margin: 10px;
     }
+    #score { font-size: 20px; margin-top: 20px; }
   </style>
 </head>
 <body>
-  <h1>七並べゲーム</h1>
-  <div id="gameArea">
-    <div>
-      <h2>場のカード</h2>
-      <div id="tableCards"></div>
-    </div>
-    <div>
-      <h2>コンピュータの手札</h2>
-      <div id="computerHand"></div>
-    </div>
-    <div>
-      <h2>あなたの手札</h2>
-      <div id="playerHand"></div>
-    </div>
+  <h1>じゃんけんゲーム</h1>
+  <div id="result">じゃんけん...</div>
+  <div id="choices">
+    <button onclick="play('グー')">グー</button>
+    <button onclick="play('チョキ')">チョキ</button>
+    <button onclick="play('パー')">パー</button>
   </div>
-  <div id="message"></div>
-  <button id="startButton">ゲーム開始</button>
+  <div id="score">あなた: 0 勝, コンピュータ: 0 勝</div>
   <script>
-    const suits = ['♠', '♥', '♦', '♣'];
-    let deck = [];
-    let playerHand = [];
-    let computerHand = [];
-    let tableCards = {};
-    let gameOver = false;
+    let playerScore = 0;
+    let computerScore = 0;
 
-    const playerHandDiv = document.getElementById('playerHand');
-    const computerHandDiv = document.getElementById('computerHand');
-    const tableCardsDiv = document.getElementById('tableCards');
-    const messageDiv = document.getElementById('message');
-    const startButton = document.getElementById('startButton');
+    function play(playerChoice) {
+      const choices = ['グー', 'チョキ', 'パー'];
+      const computerChoice = choices[Math.floor(Math.random() * 3)];
+      let resultText = 'あなた: ' + playerChoice + '、コンピュータ: ' + computerChoice + '。';
 
-    startButton.addEventListener('click', startGame);
-
-    function startGame() {
-      startButton.disabled = true;
-      gameOver = false;
-      messageDiv.textContent = '';
-      initDeck();
-      dealCards();
-      initTable();
-      renderTable();
-      renderHands();
-      checkPlayableCards();
-    }
-
-    function initDeck() {
-      deck = [];
-      for (let suit of suits) {
-        for (let i = 1; i <= 13; i++) {
-          deck.push({ suit, number: i });
-        }
-      }
-      shuffle(deck);
-    }
-
-    function shuffle(array) {
-      for (let i = array.length -1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i+1));
-        [array[i], array[j]] = [array[j], array[i]];
-      }
-    }
-
-    function dealCards() {
-      playerHand = deck.splice(0, 26);
-      computerHand = deck.splice(0, 26);
-      playerHand.sort((a, b) => a.number - b.number);
-      computerHand.sort((a, b) => a.number - b.number);
-    }
-
-    function initTable() {
-      tableCards = {};
-      for (let suit of suits) {
-        tableCards[suit] = {};
-        tableCards[suit][7] = true; // 7を場に置く
-      }
-    }
-
-    function renderTable() {
-      tableCardsDiv.innerHTML = '';
-      for (let suit of suits) {
-        const suitDiv = document.createElement('div');
-        suitDiv.style.margin = '5px';
-        for (let i = 1; i <= 13; i++) {
-          const cardDiv = document.createElement('div');
-          cardDiv.classList.add('card');
-          if (tableCards[suit][i]) {
-            cardDiv.textContent = suit + i;
-            cardDiv.classList.add('played');
-          } else {
-            cardDiv.textContent = '';
-            cardDiv.style.border = 'none';
-          }
-          suitDiv.appendChild(cardDiv);
-        }
-        tableCardsDiv.appendChild(suitDiv);
-      }
-    }
-
-    function renderHands() {
-      // プレイヤーの手札
-      playerHandDiv.innerHTML = '';
-      playerHand.forEach((card, index) => {
-        const cardDiv = document.createElement('div');
-        cardDiv.classList.add('card');
-        cardDiv.textContent = card.suit + card.number;
-        cardDiv.addEventListener('click', () => playCard(index, 'player'));
-        playerHandDiv.appendChild(cardDiv);
-      });
-
-      // コンピュータの手札
-      computerHandDiv.innerHTML = '';
-      computerHand.forEach((card) => {
-        const cardDiv = document.createElement('div');
-        cardDiv.classList.add('card', 'hidden');
-        cardDiv.textContent = '🂠';
-        computerHandDiv.appendChild(cardDiv);
-      });
-    }
-
-    function playCard(index, player) {
-      if (gameOver) return;
-      let hand = player === 'player' ? playerHand : computerHand;
-      const card = hand[index];
-      if (canPlay(card)) {
-        // カードを場に置く
-        tableCards[card.suit][card.number] = true;
-        hand.splice(index, 1);
-        renderTable();
-        renderHands();
-        checkGameOver();
-        if (player === 'player') {
-          setTimeout(computerTurn, 500);
-        }
+      if (playerChoice === computerChoice) {
+        resultText += 'あいこです！';
+      } else if (
+        (playerChoice === 'グー' && computerChoice === 'チョキ') ||
+        (playerChoice === 'チョキ' && computerChoice === 'パー') ||
+        (playerChoice === 'パー' && computerChoice === 'グー')
+      ) {
+        resultText += 'あなたの勝ちです！';
+        playerScore++;
       } else {
-        if (player === 'player') alert('そのカードは置けません');
+        resultText += 'あなたの負けです。';
+        computerScore++;
       }
-    }
 
-    function canPlay(card) {
-      if (card.number === 7) return true; // 7は常に置けないとおかしいが、初期状態で7は場にある
-      const prev = card.number -1;
-      const next = card.number +1;
-      if (tableCards[card.suit][prev] || tableCards[card.suit][next]) {
-        return true;
-      }
-      return false;
-    }
-
-    function computerTurn() {
-      let playableCards = [];
-      computerHand.forEach((card, index) => {
-        if (canPlay(card)) {
-          playableCards.push({ card, index });
-        }
-      });
-
-      if (playableCards.length > 0) {
-        // ランダムにカードを選択
-        const choice = playableCards[Math.floor(Math.random() * playableCards.length)];
-        playCard(choice.index, 'computer');
-      } else {
-        // パス
-        messageDiv.textContent = 'コンピュータはパスしました';
-        checkPlayableCards();
-      }
-    }
-
-    function checkPlayableCards() {
-      // プレイヤーが置けるカードがあるか確認
-      let playable = false;
-      playerHand.forEach((card) => {
-        if (canPlay(card)) {
-          playable = true;
-        }
-      });
-      if (!playable) {
-        messageDiv.textContent = 'あなたはパスしました';
-        setTimeout(computerTurn, 500);
-      }
-    }
-
-    function checkGameOver() {
-      if (playerHand.length === 0) {
-        gameOver = true;
-        messageDiv.textContent = 'ゲームクリア！あなたの勝ちです！';
-        startButton.disabled = false;
-      } else if (computerHand.length === 0) {
-        gameOver = true;
-        messageDiv.textContent = '残念！コンピュータの勝ちです！';
-        startButton.disabled = false;
-      }
+      document.getElementById('result').textContent = resultText;
+      document.getElementById('score').textContent = 'あなた: ' + playerScore + ' 勝, コンピュータ: ' + computerScore + ' 勝';
     }
   </script>
 </body>
