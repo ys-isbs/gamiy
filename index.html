@@ -2,197 +2,219 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>ババ抜きゲーム</title>
+  <title>将棋オセロ合体ゲーム</title>
   <style>
     body { text-align: center; font-family: Arial, sans-serif; }
     h1 { margin-top: 20px; }
-    #gameArea { display: flex; justify-content: center; flex-wrap: wrap; margin: 20px; }
-    .card {
+    #gameBoard { display: grid; grid-template-columns: repeat(8, 60px); grid-template-rows: repeat(8, 60px); gap: 2px; margin: 20px auto; }
+    .cell {
       width: 60px;
-      height: 90px;
-      border: 1px solid #000;
-      border-radius: 5px;
-      margin: 3px;
+      height: 60px;
+      background-color: green;
+      border: 1px solid black;
+      position: relative;
+      cursor: pointer;
+    }
+    .piece {
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      position: absolute;
+      top: 5px;
+      left: 5px;
+      font-size: 24px;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 18px;
-      cursor: pointer;
-      background-color: #fff;
+      color: white;
+      font-weight: bold;
     }
-    .hidden {
-      background-color: #eee;
-      cursor: pointer;
-    }
-    .matched {
-      background-color: #ccc;
-      cursor: default;
-    }
-    #playerHand, #computerHand {
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: center;
-      margin: 10px;
-    }
-    #message { font-size: 18px; margin: 10px; }
-    #startButton {
+    .black { background-color: black; }
+    .white { background-color: white; color: black; }
+    #status { font-size: 24px; margin-top: 20px; }
+    #restartButton {
       padding: 10px 20px;
       font-size: 18px;
-      margin-top: 10px;
+      margin-top: 20px;
     }
   </style>
 </head>
 <body>
-  <h1>ババ抜きゲーム</h1>
-  <div id="gameArea">
-    <div>
-      <h2>あなたの手札</h2>
-      <div id="playerHand"></div>
-    </div>
-    <div>
-      <h2>コンピュータの手札</h2>
-      <div id="computerHand"></div>
-    </div>
-  </div>
-  <div id="message"></div>
-  <button id="startButton">ゲーム開始</button>
+  <h1>将棋オセロ合体ゲーム</h1>
+  <div id="gameBoard"></div>
+  <div id="status">黒の番です</div>
+  <button id="restartButton">リスタート</button>
   <script>
-    const suits = ['♠', '♥', '♦', '♣'];
-    let deck = [];
-    let playerHand = [];
-    let computerHand = [];
+    const boardSize = 8;
+    let board = Array.from({ length: boardSize }, () => Array(boardSize).fill(null));
+    let currentPlayer = 'black';
     let gameOver = false;
+    const gameBoard = document.getElementById('gameBoard');
+    const statusDisplay = document.getElementById('status');
+    const restartButton = document.getElementById('restartButton');
 
-    const playerHandDiv = document.getElementById('playerHand');
-    const computerHandDiv = document.getElementById('computerHand');
-    const messageDiv = document.getElementById('message');
-    const startButton = document.getElementById('startButton');
+    const initialSetup = [
+      ['香', '桂', '銀', '金', null, '金', '銀', '桂'],
+      ['歩', '歩', '歩', '歩', '歩', '歩', '歩', '歩'],
+      ...Array(4).fill(Array(8).fill(null)),
+      ['歩', '歩', '歩', '歩', '歩', '歩', '歩', '歩'],
+      ['香', '桂', '銀', '金', null, '金', '銀', '桂'],
+    ];
 
-    startButton.addEventListener('click', startGame);
+    function initBoard() {
+      gameBoard.innerHTML = '';
+      for (let row = 0; row < boardSize; row++) {
+        for (let col = 0; col < boardSize; col++) {
+          const cell = document.createElement('div');
+          cell.classList.add('cell');
+          cell.dataset.row = row;
+          cell.dataset.col = col;
+          cell.addEventListener('click', handleClick);
+          gameBoard.appendChild(cell);
 
-    function startGame() {
-      startButton.disabled = true;
-      gameOver = false;
-      messageDiv.textContent = '';
-      initDeck();
-      dealCards();
-      removePairs(playerHand);
-      removePairs(computerHand);
-      renderHands();
-      if (playerHand.length === 0) {
-        gameOver = true;
-        messageDiv.textContent = 'あなたの勝ちです！';
-        startButton.disabled = false;
-      } else if (computerHand.length === 0) {
-        gameOver = true;
-        messageDiv.textContent = 'コンピュータの勝ちです！';
-        startButton.disabled = false;
-      } else {
-        messageDiv.textContent = 'あなたの番です。コンピュータの手札から1枚選んでください。';
-      }
-    }
-
-    function initDeck() {
-      deck = [];
-      for (let suit of suits) {
-        for (let i = 1; i <= 13; i++) {
-          deck.push({ suit, number: i });
-        }
-      }
-      // ジョーカーを追加
-      deck.push({ suit: 'Joker', number: 0 });
-      shuffle(deck);
-    }
-
-    function shuffle(array) {
-      for (let i = array.length -1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i+1));
-        [array[i], array[j]] = [array[j], array[i]];
-      }
-    }
-
-    function dealCards() {
-      playerHand = [];
-      computerHand = [];
-      deck.forEach((card, index) => {
-        if (index % 2 === 0) {
-          playerHand.push(card);
-        } else {
-          computerHand.push(card);
-        }
-      });
-    }
-
-    function removePairs(hand) {
-      hand.sort((a, b) => a.number - b.number);
-      for (let i = 0; i < hand.length -1; ) {
-        if (hand[i].number === hand[i+1].number && hand[i].suit !== 'Joker') {
-          hand.splice(i, 2);
-        } else {
-          i++;
-        }
-      }
-    }
-
-    function renderHands() {
-      // プレイヤーの手札
-      playerHandDiv.innerHTML = '';
-      playerHand.forEach((card, index) => {
-        const cardDiv = document.createElement('div');
-        cardDiv.classList.add('card');
-        cardDiv.textContent = card.suit === 'Joker' ? 'Joker' : card.suit + card.number;
-        playerHandDiv.appendChild(cardDiv);
-      });
-
-      // コンピュータの手札
-      computerHandDiv.innerHTML = '';
-      computerHand.forEach((card, index) => {
-        const cardDiv = document.createElement('div');
-        cardDiv.classList.add('card', 'hidden');
-        cardDiv.textContent = '🂠';
-        cardDiv.addEventListener('click', () => {
-          if (!gameOver) {
-            playerTurn(index);
+          const pieceType = initialSetup[row]?.[col];
+          if (pieceType) {
+            const piece = document.createElement('div');
+            piece.classList.add('piece', row < boardSize / 2 ? 'black' : 'white');
+            piece.textContent = pieceType;
+            cell.appendChild(piece);
+            board[row][col] = { player: row < boardSize / 2 ? 'black' : 'white', type: pieceType };
+          } else {
+            board[row][col] = null;
           }
-        });
-        computerHandDiv.appendChild(cardDiv);
+        }
+      }
+      currentPlayer = 'black';
+      gameOver = false;
+      updateStatus();
+    }
+
+    function handleClick(e) {
+      if (gameOver) return;
+      const cell = e.currentTarget;
+      const row = parseInt(cell.dataset.row);
+      const col = parseInt(cell.dataset.col);
+
+      if (board[row][col] && board[row][col].player === currentPlayer) {
+        // 駒を選択
+        selectPiece(row, col);
+      } else if (selectedPiece) {
+        // 選択した駒を移動
+        movePiece(row, col);
+      }
+    }
+
+    let selectedPiece = null;
+
+    function selectPiece(row, col) {
+      clearSelection();
+      const cell = document.querySelector(`.cell[data-row='${row}'][data-col='${col}']`);
+      cell.classList.add('selected');
+      selectedPiece = { row, col, piece: board[row][col] };
+      showValidMoves(row, col);
+    }
+
+    function movePiece(newRow, newCol) {
+      if (isValidMove(newRow, newCol)) {
+        // 駒を移動
+        board[newRow][newCol] = selectedPiece.piece;
+        board[selectedPiece.row][selectedPiece.col] = null;
+        // オセロのように相手の駒を反転
+        flipOpponentPieces(newRow, newCol);
+        currentPlayer = currentPlayer === 'black' ? 'white' : 'black';
+        clearSelection();
+        renderBoard();
+        updateStatus();
+        checkGameOver();
+      } else {
+        alert('その場所には移動できません。');
+      }
+    }
+
+    function isValidMove(row, col) {
+      // 移動範囲は縦横斜めの1マス
+      const dx = Math.abs(row - selectedPiece.row);
+      const dy = Math.abs(col - selectedPiece.col);
+      return (dx <= 1 && dy <= 1) && !(dx === 0 && dy === 0) && (!board[row][col] || board[row][col].player !== currentPlayer);
+    }
+
+    function flipOpponentPieces(row, col) {
+      // 周囲の相手の駒を反転
+      const directions = [
+        [-1, 0], [1, 0], [0, -1], [0, 1],
+        [-1, -1], [-1, 1], [1, -1], [1, 1]
+      ];
+      directions.forEach(([dx, dy]) => {
+        const r = row + dx;
+        const c = col + dy;
+        if (r >= 0 && r < boardSize && c >= 0 && c < boardSize) {
+          if (board[r][c] && board[r][c].player !== currentPlayer) {
+            board[r][c].player = currentPlayer;
+          }
+        }
       });
     }
 
-    function playerTurn(index) {
-      const card = computerHand.splice(index, 1)[0];
-      playerHand.push(card);
-      removePairs(playerHand);
-      renderHands();
-      checkGameOver();
-      if (!gameOver) {
-        setTimeout(computerTurn, 1000);
+    function showValidMoves(row, col) {
+      const cells = document.querySelectorAll('.cell');
+      cells.forEach(cell => {
+        const r = parseInt(cell.dataset.row);
+        const c = parseInt(cell.dataset.col);
+        if (isValidMove(r, c)) {
+          cell.classList.add('valid-move');
+        }
+      });
+    }
+
+    function clearSelection() {
+      const selectedCells = document.querySelectorAll('.selected, .valid-move');
+      selectedCells.forEach(cell => cell.classList.remove('selected', 'valid-move'));
+      selectedPiece = null;
+    }
+
+    function renderBoard() {
+      for (let row = 0; row < boardSize; row++) {
+        for (let col = 0; col < boardSize; col++) {
+          const cell = document.querySelector(`.cell[data-row='${row}'][data-col='${col}']`);
+          cell.innerHTML = '';
+          const pieceData = board[row][col];
+          if (pieceData) {
+            const piece = document.createElement('div');
+            piece.classList.add('piece', pieceData.player);
+            piece.textContent = pieceData.type || '';
+            cell.appendChild(piece);
+          }
+        }
       }
     }
 
-    function computerTurn() {
-      const index = Math.floor(Math.random() * playerHand.length);
-      const card = playerHand.splice(index, 1)[0];
-      computerHand.push(card);
-      removePairs(computerHand);
-      renderHands();
-      checkGameOver();
-      if (!gameOver) {
-        messageDiv.textContent = 'あなたの番です。コンピュータの手札から1枚選んでください。';
-      }
+    function updateStatus() {
+      statusDisplay.textContent = gameOver ? 'ゲーム終了' : `${currentPlayer === 'black' ? '黒' : '白'}の番です`;
     }
 
     function checkGameOver() {
-      if (playerHand.length === 0) {
+      // 相手の駒がなくなったらゲーム終了
+      const opponent = currentPlayer === 'black' ? 'white' : 'black';
+      let opponentPieces = 0;
+      for (let row = 0; row < boardSize; row++) {
+        for (let col = 0; col < boardSize; col++) {
+          if (board[row][col] && board[row][col].player === opponent) {
+            opponentPieces++;
+          }
+        }
+      }
+      if (opponentPieces === 0) {
         gameOver = true;
-        messageDiv.textContent = 'あなたの勝ちです！';
-        startButton.disabled = false;
-      } else if (computerHand.length === 0) {
-        gameOver = true;
-        messageDiv.textContent = 'コンピュータの勝ちです！';
-        startButton.disabled = false;
+        alert(`${currentPlayer === 'black' ? '黒' : '白'}の勝ちです！`);
+        updateStatus();
       }
     }
+
+    restartButton.addEventListener('click', () => {
+      initBoard();
+    });
+
+    initBoard();
   </script>
 </body>
 </html>
