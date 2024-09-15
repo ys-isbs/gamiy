@@ -2,12 +2,12 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>じゃんけんゲーム</title>
+  <title>あっち向いてホイ</title>
   <style>
     body { text-align: center; font-family: Arial, sans-serif; }
     h1 { margin-top: 50px; }
-    #result { font-size: 24px; margin: 20px; }
-    #choices button {
+    #message { font-size: 24px; margin: 20px; }
+    #choices button, #directionChoices button {
       padding: 10px 20px;
       font-size: 18px;
       margin: 10px;
@@ -16,39 +16,77 @@
   </style>
 </head>
 <body>
-  <h1>じゃんけんゲーム</h1>
-  <div id="result">じゃんけん...</div>
+  <h1>あっち向いてホイ</h1>
+  <div id="message">じゃんけん...</div>
   <div id="choices">
-    <button onclick="play('グー')">グー</button>
-    <button onclick="play('チョキ')">チョキ</button>
-    <button onclick="play('パー')">パー</button>
+    <button onclick="playJanken('グー')">グー</button>
+    <button onclick="playJanken('チョキ')">チョキ</button>
+    <button onclick="playJanken('パー')">パー</button>
+  </div>
+  <div id="directionChoices" style="display: none;">
+    <button onclick="playDirection('上')">上</button>
+    <button onclick="playDirection('下')">下</button>
+    <button onclick="playDirection('左')">左</button>
+    <button onclick="playDirection('右')">右</button>
   </div>
   <div id="score">あなた: 0 勝, コンピュータ: 0 勝</div>
   <script>
     let playerScore = 0;
     let computerScore = 0;
+    let winner = null; // 'player' or 'computer'
 
-    function play(playerChoice) {
+    function playJanken(playerChoice) {
       const choices = ['グー', 'チョキ', 'パー'];
       const computerChoice = choices[Math.floor(Math.random() * 3)];
       let resultText = 'あなた: ' + playerChoice + '、コンピュータ: ' + computerChoice + '。';
 
       if (playerChoice === computerChoice) {
-        resultText += 'あいこです！';
+        resultText += 'あいこで...';
+        document.getElementById('message').textContent = resultText;
       } else if (
         (playerChoice === 'グー' && computerChoice === 'チョキ') ||
         (playerChoice === 'チョキ' && computerChoice === 'パー') ||
         (playerChoice === 'パー' && computerChoice === 'グー')
       ) {
-        resultText += 'あなたの勝ちです！';
-        playerScore++;
+        resultText += 'あなたの勝ち！あっち向いてホイ！';
+        winner = 'player';
+        document.getElementById('message').textContent = resultText;
+        document.getElementById('choices').style.display = 'none';
+        document.getElementById('directionChoices').style.display = 'block';
       } else {
-        resultText += 'あなたの負けです。';
-        computerScore++;
+        resultText += 'コンピュータの勝ち！あっち向いてホイ！';
+        winner = 'computer';
+        document.getElementById('message').textContent = resultText;
+        document.getElementById('choices').style.display = 'none';
+        document.getElementById('directionChoices').style.display = 'block';
+      }
+    }
+
+    function playDirection(playerDirection) {
+      const directions = ['上', '下', '左', '右'];
+      const computerDirection = directions[Math.floor(Math.random() * 4)];
+      let resultText = 'あなた: ' + playerDirection + '、コンピュータ: ' + computerDirection + '。';
+
+      if (winner === 'player') {
+        if (playerDirection === computerDirection) {
+          resultText += 'あなたの勝ちです！';
+          playerScore++;
+        } else {
+          resultText += 'もう一度じゃんけん！';
+        }
+      } else if (winner === 'computer') {
+        if (playerDirection === computerDirection) {
+          resultText += 'コンピュータの勝ちです！';
+          computerScore++;
+        } else {
+          resultText += 'もう一度じゃんけん！';
+        }
       }
 
-      document.getElementById('result').textContent = resultText;
+      document.getElementById('message').textContent = resultText;
       document.getElementById('score').textContent = 'あなた: ' + playerScore + ' 勝, コンピュータ: ' + computerScore + ' 勝';
+      document.getElementById('choices').style.display = 'block';
+      document.getElementById('directionChoices').style.display = 'none';
     }
   </script>
 </body>
