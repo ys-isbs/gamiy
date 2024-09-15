@@ -2,152 +2,102 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>オセロゲーム</title>
+<title>玉入れゲーム</title>
 <style>
-  body { font-family: Arial, sans-serif; text-align: center; }
-  #gameBoard { display: grid; grid-template: repeat(8, 50px) / repeat(8, 50px);
-    gap: 2px; margin: 20px auto; width: 416px; }
-  .cell { width: 50px; height: 50px; background-color: green;
-    border: 1px solid black; position: relative; }
-  .disc { width: 40px; height: 40px; border-radius: 50%; position: absolute;
-    top: 5px; left: 5px; }
-  .black { background-color: black; }
-  .white { background-color: white; }
-  #status { font-size: 20px; margin: 10px; }
+  body { text-align: center; font-family: Arial, sans-serif; }
+  #gameArea { position: relative; width: 800px; height: 600px; margin: 0 auto; background-color: #f0f0f0; overflow: hidden; }
+  #basket { position: absolute; top: 50px; left: calc(50% - 50px); width: 100px; height: 100px; background-color: brown; border-radius: 50%; }
+  .ball { position: absolute; width: 30px; height: 30px; background-color: red; border-radius: 50%; cursor: pointer; }
+  #score { font-size: 24px; margin-top: 20px; }
+  #time { font-size: 24px; margin-top: 10px; }
+  #startButton { padding: 10px 20px; font-size: 20px; margin-top: 20px; }
 </style>
 </head>
 <body>
-<h1>オセロゲーム</h1>
-<div id="gameBoard"></div>
-<div id="status">黒の番です</div>
+<h1>玉入れゲーム</h1>
+<div id="gameArea">
+  <div id="basket"></div>
+</div>
+<div id="score">スコア: 0</div>
+<div id="time">残り時間: 30秒</div>
+<button id="startButton">ゲーム開始</button>
+
 <script>
-  const boardSize = 8;
-  let board = Array(boardSize).fill(null).map(() => Array(boardSize).fill(null));
-  let currentPlayer = 'black';
-  let gameOver = false;
-  const gameBoard = document.getElementById('gameBoard');
-  const statusDisplay = document.getElementById('status');
+  let score = 0;
+  let timeLeft = 30;
+  let gameInterval;
+  const gameArea = document.getElementById('gameArea');
+  const scoreDisplay = document.getElementById('score');
+  const timeDisplay = document.getElementById('time');
+  const startButton = document.getElementById('startButton');
+  const basket = document.getElementById('basket');
 
-  function initBoard() {
-    gameBoard.innerHTML = '';
-    for (let row = 0; row < boardSize; row++) {
-      for (let col = 0; col < boardSize; col++) {
-        const cell = document.createElement('div');
-        cell.classList.add('cell');
-        cell.dataset.row = row;
-        cell.dataset.col = col;
-        cell.addEventListener('click', handleClick);
-        gameBoard.appendChild(cell);
+  startButton.addEventListener('click', startGame);
+
+  function startGame() {
+    startButton.disabled = true;
+    score = 0;
+    timeLeft = 30;
+    scoreDisplay.textContent = 'スコア: ' + score;
+    timeDisplay.textContent = '残り時間: ' + timeLeft + '秒';
+
+    gameInterval = setInterval(() => {
+      timeLeft--;
+      timeDisplay.textContent = '残り時間: ' + timeLeft + '秒';
+      if (timeLeft <= 0) {
+        clearInterval(gameInterval);
+        endGame();
       }
-    }
-    // 初期配置
-    placeDisc(3, 3, 'white');
-    placeDisc(3, 4, 'black');
-    placeDisc(4, 3, 'black');
-    placeDisc(4, 4, 'white');
-    updateStatus();
+    }, 1000);
+
+    generateBalls();
   }
 
-  function placeDisc(row, col, color) {
-    board[row][col] = color;
-    const cell = document.querySelector(
-      `.cell[data-row='${row}'][data-col='${col}']`
-    );
-    const disc = document.createElement('div');
-    disc.classList.add('disc', color);
-    cell.appendChild(disc);
-  }
-
-  function handleClick(e) {
-    if (gameOver) return;
-    const row = parseInt(e.currentTarget.dataset.row);
-    const col = parseInt(e.currentTarget.dataset.col);
-    if (board[row][col] !== null) return;
-    const flips = getFlips(row, col, currentPlayer);
-    if (flips.length === 0) return;
-    placeDisc(row, col, currentPlayer);
-    flips.forEach(([r, c]) => {
-      board[r][c] = currentPlayer;
-      const disc = document.querySelector(
-        `.cell[data-row='${r}'][data-col='${c}'] .disc`
-      );
-      disc.classList.remove('black', 'white');
-      disc.classList.add(currentPlayer);
-    });
-    currentPlayer = currentPlayer === 'black' ? 'white' : 'black';
-    updateStatus();
-    if (!hasValidMove(currentPlayer)) {
-      currentPlayer = currentPlayer === 'black' ? 'white' : 'black';
-      if (!hasValidMove(currentPlayer)) {
-        gameOver = true;
-        displayWinner();
-      } else {
-        alert(`${currentPlayer}の番ですが、置ける場所がありません。パスします。`);
-      }
+  function generateBalls() {
+    for (let i = 0; i < 20; i++) {
+      createBall();
     }
   }
 
-  function getFlips(row, col, color) {
-    const opponent = color === 'black' ? 'white' : 'black';
-    const directions = [
-      [0, 1], [1, 0], [0, -1], [-1, 0],
-      [1, 1], [1, -1], [-1, 1], [-1, -1]
-    ];
-    let flips = [];
-    for (const [dx, dy] of directions) {
-      let r = row + dx;
-      let c = col + dy;
-      let potentialFlips = [];
-      while (r >= 0 && r < boardSize && c >= 0 && c < boardSize &&
-             board[r][c] === opponent) {
-        potentialFlips.push([r, c]);
-        r += dx;
-        c += dy;
+  function createBall() {
+    const ball = document.createElement('div');
+    ball.classList.add('ball');
+    ball.style.left = Math.random() * (gameArea.clientWidth - 30) + 'px';
+    ball.style.top = Math.random() * (gameArea.clientHeight - 30) + 'px';
+    ball.addEventListener('click', throwBall);
+    gameArea.appendChild(ball);
+  }
+
+  function throwBall(event) {
+    const ball = event.target;
+    const ballRect = ball.getBoundingClientRect();
+    const basketRect = basket.getBoundingClientRect();
+
+    // アニメーションでボールをバスケットに移動
+    const deltaX = basketRect.left + basketRect.width / 2 - (ballRect.left + ballRect.width / 2);
+    const deltaY = basketRect.top + basketRect.height / 2 - (ballRect.top + ballRect.height / 2);
+
+    ball.style.transition = 'transform 0.5s';
+    ball.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+    ball.style.pointerEvents = 'none';
+
+    setTimeout(() => {
+      ball.remove();
+      score++;
+      scoreDisplay.textContent = 'スコア: ' + score;
+      if (document.querySelectorAll('.ball').length < 20 && timeLeft > 0) {
+        createBall();
       }
-      if (r >= 0 && r < boardSize && c >= 0 && c < boardSize &&
-          board[r][c] === color && potentialFlips.length > 0) {
-        flips = flips.concat(potentialFlips);
-      }
-    }
-    return flips;
+    }, 500);
   }
 
-  function hasValidMove(color) {
-    for (let row = 0; row < boardSize; row++) {
-      for (let col = 0; col < boardSize; col++) {
-        if (board[row][col] === null && getFlips(row, col, color).length > 0) {
-          return true;
-        }
-      }
-    }
-    return false;
+  function endGame() {
+    alert('ゲーム終了！あなたのスコアは ' + score + ' 点です！');
+    startButton.disabled = false;
+    // ゲームエリアのボールをすべて削除
+    const balls = document.querySelectorAll('.ball');
+    balls.forEach(ball => ball.remove());
   }
-
-  function updateStatus() {
-    statusDisplay.textContent = gameOver
-      ? 'ゲーム終了'
-      : `${currentPlayer === 'black' ? '黒' : '白'}の番です`;
-  }
-
-  function displayWinner() {
-    let blackCount = 0;
-    let whiteCount = 0;
-    board.flat().forEach(cell => {
-      if (cell === 'black') blackCount++;
-      if (cell === 'white') whiteCount++;
-    });
-    let result = '';
-    if (blackCount > whiteCount) {
-      result = `黒の勝ちです！ (${blackCount} 対 ${whiteCount})`;
-    } else if (whiteCount > blackCount) {
-      result = `白の勝ちです！ (${whiteCount} 対 ${blackCount})`;
-    } else {
-      result = '引き分けです！';
-    }
-    alert(result);
-  }
-
-  initBoard();
 </script>
 </body>
 </html>
