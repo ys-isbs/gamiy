@@ -2,23 +2,23 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>将棋オセロ合体ゲーム</title>
+  <title>軍儀風ボードゲーム</title>
   <style>
     body { text-align: center; font-family: Arial, sans-serif; }
     h1 { margin-top: 20px; }
-    #gameBoard { display: grid; grid-template-columns: repeat(8, 60px); grid-template-rows: repeat(8, 60px); gap: 2px; margin: 20px auto; }
+    #gameBoard { display: grid; grid-template-columns: repeat(9, 60px); grid-template-rows: repeat(9, 60px); gap: 2px; margin: 20px auto; }
     .cell {
       width: 60px;
       height: 60px;
-      background-color: green;
-      border: 1px solid black;
+      background-color: beige;
+      border: 1px solid #000;
       position: relative;
       cursor: pointer;
     }
     .piece {
       width: 50px;
       height: 50px;
-      border-radius: 50%;
+      border-radius: 5px;
       position: absolute;
       top: 5px;
       left: 5px;
@@ -30,7 +30,7 @@
       font-weight: bold;
     }
     .black { background-color: black; }
-    .white { background-color: white; color: black; }
+    .white { background-color: gray; }
     #status { font-size: 24px; margin-top: 20px; }
     #restartButton {
       padding: 10px 20px;
@@ -40,12 +40,12 @@
   </style>
 </head>
 <body>
-  <h1>将棋オセロ合体ゲーム</h1>
+  <h1>軍儀風ボードゲーム</h1>
   <div id="gameBoard"></div>
   <div id="status">黒の番です</div>
   <button id="restartButton">リスタート</button>
   <script>
-    const boardSize = 8;
+    const boardSize = 9;
     let board = Array.from({ length: boardSize }, () => Array(boardSize).fill(null));
     let currentPlayer = 'black';
     let gameOver = false;
@@ -53,13 +53,12 @@
     const statusDisplay = document.getElementById('status');
     const restartButton = document.getElementById('restartButton');
 
-    const initialSetup = [
-      ['香', '桂', '銀', '金', null, '金', '銀', '桂'],
-      ['歩', '歩', '歩', '歩', '歩', '歩', '歩', '歩'],
-      ...Array(4).fill(Array(8).fill(null)),
-      ['歩', '歩', '歩', '歩', '歩', '歩', '歩', '歩'],
-      ['香', '桂', '銀', '金', null, '金', '銀', '桂'],
-    ];
+    // 駒の種類と移動パターン
+    const pieceTypes = {
+      '兵': { moves: [[0,1], [1,0], [0,-1], [-1,0]] },
+      '砲': { moves: [[0,2], [2,0], [0,-2], [-2,0]] },
+      '将': { moves: [[1,1], [1,-1], [-1,1], [-1,-1]] }
+    };
 
     function initBoard() {
       gameBoard.innerHTML = '';
@@ -72,13 +71,19 @@
           cell.addEventListener('click', handleClick);
           gameBoard.appendChild(cell);
 
-          const pieceType = initialSetup[row]?.[col];
-          if (pieceType) {
-            const piece = document.createElement('div');
-            piece.classList.add('piece', row < boardSize / 2 ? 'black' : 'white');
-            piece.textContent = pieceType;
-            cell.appendChild(piece);
-            board[row][col] = { player: row < boardSize / 2 ? 'black' : 'white', type: pieceType };
+          // 初期配置
+          if (row === 0 && (col === 4)) {
+            placePiece(row, col, '将', 'white');
+          } else if (row === 8 && (col === 4)) {
+            placePiece(row, col, '将', 'black');
+          } else if (row === 1 && (col % 2 === 1)) {
+            placePiece(row, col, '砲', 'white');
+          } else if (row === 7 && (col % 2 === 1)) {
+            placePiece(row, col, '砲', 'black');
+          } else if (row === 2 && (col % 2 === 0)) {
+            placePiece(row, col, '兵', 'white');
+          } else if (row === 6 && (col % 2 === 0)) {
+            placePiece(row, col, '兵', 'black');
           } else {
             board[row][col] = null;
           }
@@ -87,6 +92,15 @@
       currentPlayer = 'black';
       gameOver = false;
       updateStatus();
+    }
+
+    function placePiece(row, col, type, player) {
+      const cell = document.querySelector(`.cell[data-row='${row}'][data-col='${col}']`);
+      const piece = document.createElement('div');
+      piece.classList.add('piece', player);
+      piece.textContent = type;
+      cell.appendChild(piece);
+      board[row][col] = { player, type };
     }
 
     function handleClick(e) {
@@ -119,49 +133,42 @@
         // 駒を移動
         board[newRow][newCol] = selectedPiece.piece;
         board[selectedPiece.row][selectedPiece.col] = null;
-        // オセロのように相手の駒を反転
-        flipOpponentPieces(newRow, newCol);
         currentPlayer = currentPlayer === 'black' ? 'white' : 'black';
         clearSelection();
         renderBoard();
         updateStatus();
-        checkGameOver();
+        checkGameOver(newRow, newCol);
       } else {
         alert('その場所には移動できません。');
       }
     }
 
     function isValidMove(row, col) {
-      // 移動範囲は縦横斜めの1マス
-      const dx = Math.abs(row - selectedPiece.row);
-      const dy = Math.abs(col - selectedPiece.col);
-      return (dx <= 1 && dy <= 1) && !(dx === 0 && dy === 0) && (!board[row][col] || board[row][col].player !== currentPlayer);
-    }
-
-    function flipOpponentPieces(row, col) {
-      // 周囲の相手の駒を反転
-      const directions = [
-        [-1, 0], [1, 0], [0, -1], [0, 1],
-        [-1, -1], [-1, 1], [1, -1], [1, 1]
-      ];
-      directions.forEach(([dx, dy]) => {
-        const r = row + dx;
-        const c = col + dy;
-        if (r >= 0 && r < boardSize && c >= 0 && c < boardSize) {
-          if (board[r][c] && board[r][c].player !== currentPlayer) {
-            board[r][c].player = currentPlayer;
+      const piece = selectedPiece.piece;
+      const moves = pieceTypes[piece.type].moves;
+      for (let [dx, dy] of moves) {
+        const newRow = selectedPiece.row + dx;
+        const newCol = selectedPiece.col + dy;
+        if (newRow === row && newCol === col) {
+          if (!board[row][col] || board[row][col].player !== currentPlayer) {
+            return true;
           }
         }
-      });
+      }
+      return false;
     }
 
     function showValidMoves(row, col) {
-      const cells = document.querySelectorAll('.cell');
-      cells.forEach(cell => {
-        const r = parseInt(cell.dataset.row);
-        const c = parseInt(cell.dataset.col);
-        if (isValidMove(r, c)) {
-          cell.classList.add('valid-move');
+      const piece = selectedPiece.piece;
+      const moves = pieceTypes[piece.type].moves;
+      moves.forEach(([dx, dy]) => {
+        const newRow = row + dx;
+        const newCol = col + dy;
+        if (newRow >= 0 && newRow < boardSize && newCol >= 0 && newCol < boardSize) {
+          if (!board[newRow][newCol] || board[newRow][newCol].player !== currentPlayer) {
+            const cell = document.querySelector(`.cell[data-row='${newRow}'][data-col='${newCol}']`);
+            cell.classList.add('valid-move');
+          }
         }
       });
     }
@@ -192,20 +199,20 @@
       statusDisplay.textContent = gameOver ? 'ゲーム終了' : `${currentPlayer === 'black' ? '黒' : '白'}の番です`;
     }
 
-    function checkGameOver() {
-      // 相手の駒がなくなったらゲーム終了
+    function checkGameOver(row, col) {
+      // 相手の将を取ったらゲーム終了
       const opponent = currentPlayer === 'black' ? 'white' : 'black';
-      let opponentPieces = 0;
-      for (let row = 0; row < boardSize; row++) {
-        for (let col = 0; col < boardSize; col++) {
-          if (board[row][col] && board[row][col].player === opponent) {
-            opponentPieces++;
+      let opponentKingExists = false;
+      for (let r = 0; r < boardSize; r++) {
+        for (let c = 0; c < boardSize; c++) {
+          if (board[r][c] && board[r][c].player === opponent && board[r][c].type === '将') {
+            opponentKingExists = true;
           }
         }
       }
-      if (opponentPieces === 0) {
+      if (!opponentKingExists) {
         gameOver = true;
-        alert(`${currentPlayer === 'black' ? '黒' : '白'}の勝ちです！`);
+        alert(`${currentPlayer === 'black' ? '白' : '黒'}の勝ちです！`);
         updateStatus();
       }
     }
