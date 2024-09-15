@@ -2,129 +2,133 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>サッカーPKゲーム</title>
+  <title>神経衰弱ゲーム</title>
   <style>
-    body { text-align: center; font-family: Arial, sans-serif; background-color: #0c3; color: #fff; }
-    #gameArea { position: relative; width: 600px; height: 400px; margin: 20px auto; background-color: #090; border: 2px solid #fff; overflow: hidden; }
-    #ball { position: absolute; width: 30px; height: 30px; background-color: white; border-radius: 50%; bottom: 20px; left: calc(50% - 15px); }
-    #goalkeeper { position: absolute; width: 80px; height: 80px; background-color: #f00; border-radius: 50%; top: 50px; left: calc(50% - 40px); transition: left 0.5s; }
-    #powerBar { width: 300px; height: 20px; background-color: #ddd; margin: 10px auto; position: relative; }
-    #power { width: 0%; height: 100%; background-color: #f00; }
-    #message { font-size: 24px; margin-top: 20px; }
-    button { padding: 10px 20px; font-size: 16px; margin-top: 10px; }
+    body { text-align: center; font-family: Arial, sans-serif; background-color: #f0f0f0; }
+    h1 { margin-top: 20px; }
+    #gameBoard { width: 640px; margin: 20px auto; display: flex; flex-wrap: wrap; }
+    .card {
+      width: 150px;
+      height: 150px;
+      margin: 10px;
+      background-color: #007BFF;
+      color: white;
+      font-size: 100px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      border-radius: 10px;
+      user-select: none;
+    }
+    .matched {
+      background-color: #28a745;
+      cursor: default;
+    }
+    .flipped {
+      background-color: #ffffff;
+      color: #000;
+    }
+    #score { font-size: 24px; margin-top: 20px; }
+    #restartButton {
+      padding: 10px 20px;
+      font-size: 18px;
+      margin-top: 20px;
+    }
   </style>
 </head>
 <body>
-  <h1>サッカーPKゲーム</h1>
-  <div id="gameArea">
-    <div id="ball"></div>
-    <div id="goalkeeper"></div>
-  </div>
-  <div id="powerBar">
-    <div id="power"></div>
-  </div>
-  <button id="shootButton">シュート！</button>
-  <p id="message"></p>
-
+  <h1>神経衰弱ゲーム</h1>
+  <div id="gameBoard"></div>
+  <div id="score">試行回数: 0</div>
+  <button id="restartButton">再スタート</button>
   <script>
-    const ball = document.getElementById('ball');
-    const goalkeeper = document.getElementById('goalkeeper');
-    const powerBar = document.getElementById('power');
-    const shootButton = document.getElementById('shootButton');
-    const message = document.getElementById('message');
-    let power = 0;
-    let increasing = true;
-    let powerInterval;
-    let gameInProgress = false;
+    const symbols = ['🍎', '🍌', '🍇', '🍓', '🍍', '🍒', '🥝', '🍑'];
+    let cards = [];
+    let flippedCards = [];
+    let matchedCount = 0;
+    let attempts = 0;
+    const gameBoard = document.getElementById('gameBoard');
+    const scoreDisplay = document.getElementById('score');
+    const restartButton = document.getElementById('restartButton');
 
-    function startPowerBar() {
-      power = 0;
-      increasing = true;
-      powerBar.style.width = '0%';
-      powerInterval = setInterval(() => {
-        if (increasing) {
-          power += 1;
-          if (power >= 100) {
-            increasing = false;
-          }
-        } else {
-          power -= 1;
-          if (power <= 0) {
-            increasing = true;
-          }
+    function initGame() {
+      gameBoard.innerHTML = '';
+      attempts = 0;
+      matchedCount = 0;
+      scoreDisplay.textContent = '試行回数: 0';
+      cards = createCards();
+      shuffle(cards);
+      cards.forEach(card => {
+        gameBoard.appendChild(card.element);
+      });
+    }
+
+    function createCards() {
+      const cardArray = [];
+      symbols.forEach(symbol => {
+        for (let i = 0; i < 2; i++) {
+          const card = {
+            symbol: symbol,
+            element: document.createElement('div'),
+            matched: false,
+          };
+          card.element.classList.add('card');
+          card.element.addEventListener('click', () => flipCard(card));
+          cardArray.push(card);
         }
-        powerBar.style.width = power + '%';
-      }, 10);
+      });
+      return cardArray;
     }
 
-    function stopPowerBar() {
-      clearInterval(powerInterval);
+    function shuffle(array) {
+      for (let i = array.length -1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i+1));
+        [array[i], array[j]] = [array[j], array[i]];
+      }
     }
 
-    function shootBall() {
-      if (gameInProgress) return;
-      gameInProgress = true;
-      stopPowerBar();
-      message.textContent = '';
-      const shootDirection = prompt('シュート方向を選んでください（左、中央、右）:');
-      if (!['左', '中央', '右'].includes(shootDirection)) {
-        message.textContent = '無効な方向です。もう一度やり直してください。';
-        gameInProgress = false;
-        startPowerBar();
-        return;
-      }
-      // ゴールキーパーの動きをランダムに決定
-      const goalkeeperDirections = ['左', '中央', '右'];
-      const goalkeeperChoice = goalkeeperDirections[Math.floor(Math.random() * 3)];
-
-      // ゴールキーパーのアニメーション
-      let goalkeeperMove = 0;
-      if (goalkeeperChoice === '左') {
-        goalkeeperMove = -100;
-      } else if (goalkeeperChoice === '右') {
-        goalkeeperMove = 100;
-      }
-      goalkeeper.style.left = `calc(50% - 40px + ${goalkeeperMove}px)`;
-
-      // ボールのアニメーション
-      let ballMoveX = 0;
-      if (shootDirection === '左') {
-        ballMoveX = -100;
-      } else if (shootDirection === '右') {
-        ballMoveX = 100;
-      }
-      ball.style.transition = 'bottom 0.5s, left 0.5s';
-      ball.style.bottom = '350px';
-      ball.style.left = `calc(50% - 15px + ${ballMoveX}px)`;
-
-      // 結果の判定
-      setTimeout(() => {
-        if (shootDirection !== goalkeeperChoice || power > 70) {
-          message.textContent = 'ゴール！';
-        } else {
-          message.textContent = 'セーブされました！';
+    function flipCard(card) {
+      if (flippedCards.length < 2 && !card.matched && !flippedCards.includes(card)) {
+        card.element.classList.add('flipped');
+        card.element.textContent = card.symbol;
+        flippedCards.push(card);
+        if (flippedCards.length === 2) {
+          attempts++;
+          scoreDisplay.textContent = '試行回数: ' + attempts;
+          checkForMatch();
         }
-        resetPositions();
-        gameInProgress = false;
-        startPowerBar();
-      }, 800);
+      }
     }
 
-    function resetPositions() {
-      // ゴールキーパーを元の位置に戻す
-      goalkeeper.style.left = 'calc(50% - 40px)';
-      // ボールを元の位置に戻す
-      ball.style.transition = 'none';
-      ball.style.bottom = '20px';
-      ball.style.left = 'calc(50% - 15px)';
-      setTimeout(() => {
-        ball.style.transition = 'bottom 0.5s, left 0.5s';
-      }, 50);
+    function checkForMatch() {
+      const [card1, card2] = flippedCards;
+      if (card1.symbol === card2.symbol) {
+        card1.matched = true;
+        card2.matched = true;
+        card1.element.classList.add('matched');
+        card2.element.classList.add('matched');
+        flippedCards = [];
+        matchedCount++;
+        if (matchedCount === symbols.length) {
+          setTimeout(() => {
+            alert('ゲームクリア！試行回数: ' + attempts);
+          }, 500);
+        }
+      } else {
+        setTimeout(() => {
+          card1.element.classList.remove('flipped');
+          card2.element.classList.remove('flipped');
+          card1.element.textContent = '';
+          card2.element.textContent = '';
+          flippedCards = [];
+        }, 1000);
+      }
     }
 
-    shootButton.addEventListener('click', shootBall);
+    restartButton.addEventListener('click', initGame);
 
-    startPowerBar();
+    initGame();
   </script>
 </body>
 </html>
