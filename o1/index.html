@@ -2,257 +2,173 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>スイカキャッチゲーム</title>
+    <title>シンプルプラットフォーマー</title>
     <style>
         body {
             margin: 0;
-            padding: 0;
             overflow: hidden;
-            background-color: #f0f8ff; /* 空の色 */
-            font-family: Arial, sans-serif;
+            background-color: #87CEEB; /* 空の色 */
         }
-        #gameContainer {
-            position: relative;
-            width: 800px;
-            height: 600px;
+        canvas {
+            display: block;
             margin: 0 auto;
-            background-color: #87ceeb; /* 空の色 */
-            border: 2px solid #000;
-            overflow: hidden;
-        }
-        #basket {
-            position: absolute;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 100px;
-            height: 50px;
-            background-color: #8b4513; /* 茶色 */
-            border-radius: 10px;
-        }
-        .watermelon {
-            position: absolute;
-            width: 50px;
-            height: 50px;
-            background-image: url('https://i.imgur.com/1bX5QH6.png'); /* スイカの画像URL */
-            background-size: cover;
-        }
-        #scoreBoard {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            color: #fff;
-            font-size: 20px;
-            text-shadow: 1px 1px 2px #000;
-        }
-        #livesBoard {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            color: #fff;
-            font-size: 20px;
-            text-shadow: 1px 1px 2px #000;
-        }
-        #gameOver {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            color: #ff0000;
-            font-size: 40px;
-            display: none;
-            text-shadow: 2px 2px 4px #000;
-        }
-        #restartButton {
-            position: absolute;
-            top: 60%;
-            left: 50%;
-            transform: translateX(-50%);
-            padding: 10px 20px;
-            font-size: 20px;
-            background-color: #32cd32;
-            color: #fff;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            display: none;
-        }
-        #restartButton:hover {
-            background-color: #228b22;
+            background-color: #87CEEB;
         }
     </style>
 </head>
 <body>
-    <div id="gameContainer">
-        <div id="scoreBoard">スコア: 0</div>
-        <div id="livesBoard">ライフ: 5</div>
-        <div id="basket"></div>
-        <div id="gameOver">ゲームオーバー</div>
-        <button id="restartButton">再挑戦</button>
-    </div>
+<canvas id="gameCanvas" width="800" height="450"></canvas>
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
 
-    <script>
-        const gameContainer = document.getElementById('gameContainer');
-        const basket = document.getElementById('basket');
-        const scoreBoard = document.getElementById('scoreBoard');
-        const livesBoard = document.getElementById('livesBoard');
-        const gameOverText = document.getElementById('gameOver');
-        const restartButton = document.getElementById('restartButton');
+    const gravity = 0.5;
+    const friction = 0.8;
 
-        const GAME_WIDTH = 800;
-        const GAME_HEIGHT = 600;
-        const BASKET_WIDTH = 100;
-        const BASKET_HEIGHT = 50;
-        const WATERMELON_SIZE = 50;
-        const INITIAL_LIVES = 5;
-        const WATERMELON_FALL_SPEED = 2; // 初期の落下速度
-        const WATERMELON_SPAWN_INTERVAL = 2000; // ミリ秒
+    let keys = {};
 
-        let score = 0;
-        let lives = INITIAL_LIVES;
-        let watermelons = [];
-        let spawnInterval;
-        let gameRunning = false;
-        let fallSpeed = WATERMELON_FALL_SPEED;
-
-        // バスケットの初期位置
-        let basketX = (GAME_WIDTH - BASKET_WIDTH) / 2;
-        basket.style.left = basketX + 'px';
-
-        // キーボード入力
-        let keys = {};
-        document.addEventListener('keydown', function(e) {
-            keys[e.code] = true;
-        });
-        document.addEventListener('keyup', function(e) {
-            keys[e.code] = false;
-        });
-
-        // マウス入力
-        gameContainer.addEventListener('mousemove', function(e) {
-            const rect = gameContainer.getBoundingClientRect();
-            let mouseX = e.clientX - rect.left;
-            basketX = mouseX - BASKET_WIDTH / 2;
-            // バスケットが画面外に出ないように調整
-            if (basketX < 0) basketX = 0;
-            if (basketX + BASKET_WIDTH > GAME_WIDTH) basketX = GAME_WIDTH - BASKET_WIDTH;
-            basket.style.left = basketX + 'px';
-        });
-
-        // スコアとライフの更新
-        function updateScore() {
-            scoreBoard.textContent = `スコア: ${score}`;
+    // プレイヤークラス
+    class Player {
+        constructor() {
+            this.width = 50;
+            this.height = 50;
+            this.x = 100;
+            this.y = canvas.height - this.height - 100;
+            this.velX = 0;
+            this.velY = 0;
+            this.speed = 5;
+            this.jumpStrength = 15;
+            this.onGround = false;
+            this.color = '#FF0000';
         }
 
-        function updateLives() {
-            livesBoard.textContent = `ライフ: ${lives}`;
-        }
-
-        // スイカの生成
-        function spawnWatermelon() {
-            const watermelon = document.createElement('div');
-            watermelon.classList.add('watermelon');
-            watermelon.style.left = Math.random() * (GAME_WIDTH - WATERMELON_SIZE) + 'px';
-            watermelon.style.top = '-50px';
-            gameContainer.appendChild(watermelon);
-
-            watermelons.push({
-                element: watermelon,
-                x: parseFloat(watermelon.style.left),
-                y: -WATERMELON_SIZE,
-            });
-
-            // 次のスイカを生成
-            if (gameRunning) {
-                spawnInterval = setTimeout(spawnWatermelon, WATERMELON_SPAWN_INTERVAL);
-            }
-        }
-
-        // ゲームループ
-        function gameLoop() {
-            // バスケットの移動（キーボード）
-            if (keys['ArrowLeft']) {
-                basketX -= 5;
-                if (basketX < 0) basketX = 0;
-                basket.style.left = basketX + 'px';
-            }
-            if (keys['ArrowRight']) {
-                basketX += 5;
-                if (basketX + BASKET_WIDTH > GAME_WIDTH) basketX = GAME_WIDTH - BASKET_WIDTH;
-                basket.style.left = basketX + 'px';
-            }
-
-            // スイカの移動
-            for (let i = 0; i < watermelons.length; i++) {
-                let wm = watermelons[i];
-                wm.y += fallSpeed;
-                wm.element.style.top = wm.y + 'px';
-
-                // キャッチ判定
-                if (wm.y + WATERMELON_SIZE >= GAME_HEIGHT - BASKET_HEIGHT - 20) {
-                    if (wm.x + WATERMELON_SIZE > basketX && wm.x < basketX + BASKET_WIDTH) {
-                        // キャッチ成功
-                        score += 10;
-                        updateScore();
-                        gameContainer.removeChild(wm.element);
-                        watermelons.splice(i, 1);
-                        i--;
-                    } else if (wm.y > GAME_HEIGHT) {
-                        // キャッチ失敗
-                        lives -= 1;
-                        updateLives();
-                        gameContainer.removeChild(wm.element);
-                        watermelons.splice(i, 1);
-                        i--;
-                        if (lives <= 0) {
-                            endGame();
-                        }
-                    }
+        update() {
+            // 横移動
+            if (keys['ArrowRight'] || keys['KeyD']) {
+                if (this.velX < this.speed) {
+                    this.velX++;
                 }
             }
 
-            // ゲームの難易度調整
-            if (score % 100 === 0 && score !== 0) {
-                fallSpeed += 0.5;
-                // スコアが100点刻みでスピードアップ
+            if (keys['ArrowLeft'] || keys['KeyA']) {
+                if (this.velX > -this.speed) {
+                    this.velX--;
+                }
             }
 
-            if (gameRunning) {
-                requestAnimationFrame(gameLoop);
+            // ジャンプ
+            if ((keys['ArrowUp'] || keys['KeyW'] || keys['Space']) && this.onGround) {
+                this.velY = -this.jumpStrength;
+                this.onGround = false;
+            }
+
+            // 重力適用
+            this.velY += gravity;
+
+            // 速度に摩擦を適用
+            this.velX *= friction;
+
+            // 位置更新
+            this.x += this.velX;
+            this.y += this.velY;
+
+            // 地面との衝突判定
+            if (this.y + this.height >= canvas.height - 50) {
+                this.y = canvas.height - 50 - this.height;
+                this.velY = 0;
+                this.onGround = true;
+            }
+
+            // 壁との衝突判定
+            if (this.x < 0) {
+                this.x = 0;
+                this.velX = 0;
+            }
+
+            if (this.x + this.width > canvas.width) {
+                this.x = canvas.width - this.width;
+                this.velX = 0;
             }
         }
 
-        // ゲーム開始
-        function startGame() {
-            score = 0;
-            lives = INITIAL_LIVES;
-            fallSpeed = WATERMELON_FALL_SPEED;
-            updateScore();
-            updateLives();
-            watermelons.forEach(wm => gameContainer.removeChild(wm.element));
-            watermelons = [];
-            gameOverText.style.display = 'none';
-            restartButton.style.display = 'none';
-            gameRunning = true;
-            spawnWatermelon();
-            gameLoop();
+        draw() {
+            ctx.fillStyle = this.color;
+            ctx.fillRect(this.x, this.y, this.width, this.height);
+        }
+    }
+
+    // プラットフォームクラス
+    class Platform {
+        constructor(x, y, width, height) {
+            this.x = x;
+            this.y = y;
+            this.width = width;
+            this.height = height;
+            this.color = '#654321';
         }
 
-        // ゲーム終了
-        function endGame() {
-            gameRunning = false;
-            clearTimeout(spawnInterval);
-            watermelons.forEach(wm => gameContainer.removeChild(wm.element));
-            watermelons = [];
-            gameOverText.style.display = 'block';
-            restartButton.style.display = 'block';
+        draw() {
+            ctx.fillStyle = this.color;
+            ctx.fillRect(this.x, this.y, this.width, this.height);
         }
+    }
 
-        // リスタートボタンのイベントリスナー
-        restartButton.addEventListener('click', startGame);
+    // ゲームオブジェクトの初期化
+    const player = new Player();
+    const platforms = [
+        new Platform(0, canvas.height - 50, canvas.width, 50),
+        new Platform(200, canvas.height - 150, 200, 20),
+        new Platform(500, canvas.height - 250, 200, 20),
+        new Platform(300, canvas.height - 350, 200, 20)
+    ];
 
-        // ゲーム開始
-        startGame();
-    </script>
+    // キー入力の監視
+    window.addEventListener('keydown', function(e) {
+        keys[e.code] = true;
+    });
+
+    window.addEventListener('keyup', function(e) {
+        keys[e.code] = false;
+    });
+
+    // 衝突判定関数
+    function checkCollision(player, platform) {
+        if (player.x < platform.x + platform.width &&
+            player.x + player.width > platform.x &&
+            player.y < platform.y + platform.height &&
+            player.y + player.height > platform.y) {
+            
+            // プレイヤーの下側がプラットフォームの上側に接触している場合
+            if (player.velY > 0 && player.y + player.height - player.velY <= platform.y) {
+                player.y = platform.y - player.height;
+                player.velY = 0;
+                player.onGround = true;
+            }
+        }
+    }
+
+    // メインループ
+    function gameLoop() {
+        // 画面をクリア
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // プラットフォームを描画
+        platforms.forEach(platform => platform.draw());
+
+        // プレイヤーを更新・描画
+        player.update();
+
+        // 衝突判定
+        player.onGround = false;
+        platforms.forEach(platform => checkCollision(player, platform));
+
+        player.draw();
+
+        requestAnimationFrame(gameLoop);
+    }
+
+    // ゲーム開始
+    gameLoop();
+</script>
 </body>
 </html>
