@@ -3,199 +3,189 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HunterxHunter's 軍儀 (Simplified)</title>
+    <title>Pong Game - Atari's Classic</title>
     <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
         body {
-            font-family: Arial, sans-serif;
             display: flex;
             justify-content: center;
             align-items: center;
             height: 100vh;
-            margin: 0;
-            background-color: #f0f0f0;
+            background-color: #000;
+            font-family: Arial, sans-serif;
+            color: #fff;
         }
-        #gameBoard {
-            display: grid;
-            grid-template-columns: repeat(6, 60px);
-            grid-template-rows: repeat(6, 60px);
-            gap: 2px;
+        canvas {
             background-color: #333;
+            border: 2px solid #fff;
         }
-        .cell {
-            width: 60px;
-            height: 60px;
-            background-color: #fff;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            font-size: 24px;
-            cursor: pointer;
-        }
-        .player1 {
-            background-color: #ff6347;
-            color: #fff;
-        }
-        .player2 {
-            background-color: #4682b4;
-            color: #fff;
-        }
-        #status {
-            margin-top: 20px;
+        #scoreBoard {
             text-align: center;
-        }
-        button {
-            margin-top: 10px;
+            margin-top: 20px;
         }
     </style>
 </head>
 <body>
 
-<div>
-    <div id="gameBoard"></div>
-    <div id="status">
-        <p id="turnIndicator">Player 1's Turn</p>
-        <button onclick="resetGame()">Restart Game</button>
-    </div>
+<canvas id="pongCanvas" width="800" height="400"></canvas>
+<div id="scoreBoard">
+    <h2>Pong Game</h2>
+    <p><strong>Player 1 (W/S) | Player 2 (Up/Down Arrows)</strong></p>
+    <p>Score: <span id="score">0 - 0</span></p>
 </div>
 
 <script>
     // Game setup
-    const boardSize = 6;
-    const gameBoard = document.getElementById('gameBoard');
-    const turnIndicator = document.getElementById('turnIndicator');
-    let currentPlayer = 1;
-    let selectedPiece = null;
-    let board = [];
+    const canvas = document.getElementById('pongCanvas');
+    const ctx = canvas.getContext('2d');
+    const scoreDisplay = document.getElementById('score');
 
-    // Initialize the board with pieces for both players
-    function initBoard() {
-        board = Array(boardSize).fill(null).map(() => Array(boardSize).fill(null));
-        
-        // Set Player 1's pieces (King and two soldiers)
-        board[0][0] = { player: 1, type: 'K' }; // King
-        board[0][1] = { player: 1, type: 'S' }; // Soldier
-        board[0][2] = { player: 1, type: 'S' }; // Soldier
+    const paddleWidth = 10, paddleHeight = 100;
+    let paddle1Y = canvas.height / 2 - paddleHeight / 2;
+    let paddle2Y = canvas.height / 2 - paddleHeight / 2;
+    const paddleSpeed = 7;
 
-        // Set Player 2's pieces (King and two soldiers)
-        board[5][5] = { player: 2, type: 'K' }; // King
-        board[5][4] = { player: 2, type: 'S' }; // Soldier
-        board[5][3] = { player: 2, type: 'S' }; // Soldier
+    // Ball properties
+    let ballX = canvas.width / 2;
+    let ballY = canvas.height / 2;
+    const ballRadius = 10;
+    let ballSpeedX = 5;
+    let ballSpeedY = 3;
+
+    // Scores
+    let score1 = 0;
+    let score2 = 0;
+    const winningScore = 10;
+
+    // Game state
+    let isGameOver = false;
+
+    // Paddle control state
+    let paddle1Up = false, paddle1Down = false;
+    let paddle2Up = false, paddle2Down = false;
+
+    // Event listeners for controls
+    document.addEventListener('keydown', function(event) {
+        if (event.key === 'w') paddle1Up = true;
+        if (event.key === 's') paddle1Down = true;
+        if (event.key === 'ArrowUp') paddle2Up = true;
+        if (event.key === 'ArrowDown') paddle2Down = true;
+    });
+
+    document.addEventListener('keyup', function(event) {
+        if (event.key === 'w') paddle1Up = false;
+        if (event.key === 's') paddle1Down = false;
+        if (event.key === 'ArrowUp') paddle2Up = false;
+        if (event.key === 'ArrowDown') paddle2Down = false;
+    });
+
+    // Mobile touch controls
+    canvas.addEventListener('touchmove', function(event) {
+        const touchY = event.touches[0].clientY;
+        if (touchY < canvas.height / 2) paddle1Up = true, paddle1Down = false;
+        else paddle1Up = false, paddle1Down = true;
+    });
+
+    function resetBall() {
+        ballX = canvas.width / 2;
+        ballY = canvas.height / 2;
+        ballSpeedX = -ballSpeedX;
+        ballSpeedY = 3;
     }
 
-    // Create the board UI
-    function createBoard() {
-        gameBoard.innerHTML = '';
-        for (let row = 0; row < boardSize; row++) {
-            for (let col = 0; col < boardSize; col++) {
-                const cell = document.createElement('div');
-                cell.classList.add('cell');
-                cell.dataset.row = row;
-                cell.dataset.col = col;
-                if (board[row][col]) {
-                    const piece = board[row][col];
-                    cell.textContent = piece.type;
-                    cell.classList.add(`player${piece.player}`);
-                }
-                cell.addEventListener('click', () => handleCellClick(row, col));
-                gameBoard.appendChild(cell);
-            }
+    function updateGame() {
+        // Move paddles
+        if (paddle1Up && paddle1Y > 0) paddle1Y -= paddleSpeed;
+        if (paddle1Down && paddle1Y < canvas.height - paddleHeight) paddle1Y += paddleSpeed;
+        if (paddle2Up && paddle2Y > 0) paddle2Y -= paddleSpeed;
+        if (paddle2Down && paddle2Y < canvas.height - paddleHeight) paddle2Y += paddleSpeed;
+
+        // Move the ball
+        ballX += ballSpeedX;
+        ballY += ballSpeedY;
+
+        // Ball collision with top and bottom walls
+        if (ballY + ballRadius > canvas.height || ballY - ballRadius < 0) {
+            ballSpeedY = -ballSpeedY;
         }
-    }
 
-    // Handle clicks on cells
-    function handleCellClick(row, col) {
-        const selectedCell = board[row][col];
-
-        // If selecting own piece
-        if (selectedCell && selectedCell.player === currentPlayer) {
-            selectedPiece = { row, col };
-            highlightValidMoves(row, col);
-        } 
-        // If moving to an empty cell or capturing opponent's piece
-        else if (selectedPiece) {
-            const validMove = isValidMove(selectedPiece.row, selectedPiece.col, row, col);
-            if (validMove) {
-                movePiece(selectedPiece.row, selectedPiece.col, row, col);
-                checkForWinner();
-                switchTurn();
-                selectedPiece = null;
-            }
+        // Ball collision with paddles
+        if (ballX - ballRadius < paddleWidth && ballY > paddle1Y && ballY < paddle1Y + paddleHeight) {
+            ballSpeedX = -ballSpeedX;
         }
-    }
 
-    // Highlight valid moves for the selected piece
-    function highlightValidMoves(row, col) {
-        // Clear previous highlights
-        const cells = document.querySelectorAll('.cell');
-        cells.forEach(cell => cell.style.border = '');
-
-        // Highlight adjacent cells
-        const moves = getValidMoves(row, col);
-        moves.forEach(([r, c]) => {
-            const cell = document.querySelector(`[data-row='${r}'][data-col='${c}']`);
-            if (cell) {
-                cell.style.border = '2px solid yellow';
-            }
-        });
-    }
-
-    // Get valid moves for a piece
-    function getValidMoves(row, col) {
-        const moves = [];
-        const directions = [[-1, 0], [1, 0], [0, -1], [0, 1]]; // Up, Down, Left, Right
-        directions.forEach(([dr, dc]) => {
-            const newRow = row + dr;
-            const newCol = col + dc;
-            if (newRow >= 0 && newRow < boardSize && newCol >= 0 && newCol < boardSize) {
-                if (!board[newRow][newCol] || board[newRow][newCol].player !== currentPlayer) {
-                    moves.push([newRow, newCol]);
-                }
-            }
-        });
-        return moves;
-    }
-
-    // Check if a move is valid
-    function isValidMove(fromRow, fromCol, toRow, toCol) {
-        const validMoves = getValidMoves(fromRow, fromCol);
-        return validMoves.some(([r, c]) => r === toRow && c === toCol);
-    }
-
-    // Move the piece on the board
-    function movePiece(fromRow, fromCol, toRow, toCol) {
-        const piece = board[fromRow][fromCol];
-        board[fromRow][fromCol] = null;
-        board[toRow][toCol] = piece;
-        createBoard();
-    }
-
-    // Switch turns between players
-    function switchTurn() {
-        currentPlayer = currentPlayer === 1 ? 2 : 1;
-        turnIndicator.textContent = `Player ${currentPlayer}'s Turn`;
-    }
-
-    // Check if there's a winner
-    function checkForWinner() {
-        const kings = board.flat().filter(piece => piece && piece.type === 'K');
-        if (kings.length < 2) {
-            alert(`Player ${currentPlayer} wins!`);
-            resetGame();
+        if (ballX + ballRadius > canvas.width - paddleWidth && ballY > paddle2Y && ballY < paddle2Y + paddleHeight) {
+            ballSpeedX = -ballSpeedX;
         }
+
+        // Ball goes out of bounds (left or right)
+        if (ballX - ballRadius < 0) {
+            score2++;
+            resetBall();
+        }
+        if (ballX + ballRadius > canvas.width) {
+            score1++;
+            resetBall();
+        }
+
+        // Check if the game is over
+        if (score1 >= winningScore || score2 >= winningScore) {
+            isGameOver = true;
+        }
+
+        // Update the score display
+        scoreDisplay.textContent = `${score1} - ${score2}`;
+
+        // Game over logic
+        if (isGameOver) {
+            ctx.font = '30px Arial';
+            ctx.fillStyle = '#fff';
+            ctx.fillText(`Player ${score1 >= winningScore ? '1' : '2'} Wins!`, canvas.width / 2 - 100, canvas.height / 2);
+            return;
+        }
+
+        // Render everything
+        renderGame();
     }
 
-    // Reset the game
-    function resetGame() {
-        currentPlayer = 1;
-        initBoard();
-        createBoard();
-        turnIndicator.textContent = "Player 1's Turn";
+    function renderGame() {
+        // Clear the canvas
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Draw paddles
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, paddle1Y, paddleWidth, paddleHeight); // Paddle 1 (left)
+        ctx.fillRect(canvas.width - paddleWidth, paddle2Y, paddleWidth, paddleHeight); // Paddle 2 (right)
+
+        // Draw ball
+        ctx.beginPath();
+        ctx.arc(ballX, ballY, ballRadius, 0, Math.PI * 2);
+        ctx.fillStyle = '#fff';
+        ctx.fill();
+        ctx.closePath();
+
+        // Draw center line
+        ctx.setLineDash([5, 5]);
+        ctx.beginPath();
+        ctx.moveTo(canvas.width / 2, 0);
+        ctx.lineTo(canvas.width / 2, canvas.height);
+        ctx.strokeStyle = '#fff';
+        ctx.stroke();
     }
 
-    // Start the game
-    initBoard();
-    createBoard();
+    function gameLoop() {
+        if (!isGameOver) {
+            updateGame();
+        }
+        requestAnimationFrame(gameLoop);
+    }
 
+    // Start the game loop
+    gameLoop();
 </script>
 
 </body>
