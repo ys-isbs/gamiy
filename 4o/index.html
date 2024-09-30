@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>スイカキャッチゲーム</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #87CEEB; /* 空の色 */
+            font-family: Arial, sans-serif;
+        }
+        #gameCanvas {
+            display: block;
+            background-color: #87CEEB;
+            margin: 0 auto;
+        }
+        #gameInfo {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 20px;
+            color: #ffffff;
+            text-shadow: 1px 1px 3px #000000;
+        }
+        #gameOver {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #FF0000;
+            font-size: 40px;
+            display: none;
+        }
+        #restartButton {
+            position: absolute;
+            top: 60%;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 10px 20px;
+            font-size: 20px;
+            background-color: #32CD32;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            display: none;
+        }
+        #restartButton:hover {
+            background-color: #228B22;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <div id="gameInfo">
+        <span>スコア: <span id="score">0</span></span>
+        <span style="margin-left: 20px;">ライフ: <span id="lives">5</span></span>
+    </div>
+    <div id="gameOver">ゲームオーバー</div>
+    <button id="restartButton">再挑戦</button>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreElement = document.getElementById('score');
+        const livesElement = document.getElementById('lives');
+        const gameOverText = document.getElementById('gameOver');
+        const restartButton = document.getElementById('restartButton');
+
+        const GAME_WIDTH = canvas.width;
+        const GAME_HEIGHT = canvas.height;
+
+        const BASKET_WIDTH = 100;
+        const BASKET_HEIGHT = 50;
+        const BASKET_Y = GAME_HEIGHT - BASKET_HEIGHT - 10;
+        const WATERMELON_SIZE = 50;
+        const INITIAL_LIVES = 5;
+        const WATERMELON_FALL_SPEED = 2;
+
+        let score = 0;
+        let lives = INITIAL_LIVES;
+        let watermelons = [];
+        let basketX = (GAME_WIDTH - BASKET_WIDTH) / 2;
+        let gameOver = false;
+        let fallSpeed = WATERMELON_FALL_SPEED;
+
+        // スイカオブジェクト
+        class Watermelon {
+            constructor(x, y, size, speed) {
+                this.x = x;
+                this.y = y;
+                this.size = size;
+                this.speed = speed;
+            }
+
+            draw() {
+                ctx.fillStyle = '#32CD32'; // スイカの色
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size / 2, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            update() {
+                this.y += this.speed;
+            }
+        }
+
+        // バスケットオブジェクト
+        class Basket {
+            constructor(x, y, width, height) {
+                this.x = x;
+                this.y = y;
+                this.width = width;
+                this.height = height;
+                this.speed = 7;
+            }
+
+            draw() {
+                ctx.fillStyle = '#8B4513'; // 茶色
+                ctx.fillRect(this.x, this.y, this.width, this.height);
+            }
+
+            moveLeft() {
+                this.x -= this.speed;
+                if (this.x < 0) this.x = 0;
+            }
+
+            moveRight() {
+                this.x += this.speed;
+                if (this.x + this.width > GAME_WIDTH) this.x = GAME_WIDTH - this.width;
+            }
+        }
+
+        const basket = new Basket(basketX, BASKET_Y, BASKET_WIDTH, BASKET_HEIGHT);
+
+        // スイカを生成する関数
+        function spawnWatermelon() {
+            const size = WATERMELON_SIZE;
+            const x = Math.random() * (GAME_WIDTH - size) + size / 2;
+            const y = -size;
+            const watermelon = new Watermelon(x, y, size, fallSpeed);
+            watermelons.push(watermelon);
+        }
+
+        // 衝突判定
+        function checkCollision(watermelon, basket) {
+            return (
+                watermelon.x > basket.x &&
+                watermelon.x < basket.x + basket.width &&
+                watermelon.y + watermelon.size / 2 > basket.y
+            );
+        }
+
+        // ゲームオーバー処理
+        function endGame() {
+            gameOver = true;
+            gameOverText.style.display = 'block';
+            restartButton.style.display = 'block';
+        }
+
+        // ゲームリセット
+        function resetGame() {
+            score = 0;
+            lives = INITIAL_LIVES;
+            watermelons = [];
+            fallSpeed = WATERMELON_FALL_SPEED;
+            gameOver = false;
+            gameOverText.style.display = 'none';
+            restartButton.style.display = 'none';
+            scoreElement.textContent = score;
+            livesElement.textContent = lives;
+        }
+
+        // ゲームループ
+        function gameLoop() {
+            if (gameOver) return;
+
+            ctx.clearRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+
+            // バスケットを描画
+            basket.draw();
+
+            // スイカを描画・更新
+            for (let i = 0; i < watermelons.length; i++) {
+                const watermelon = watermelons[i];
+                watermelon.update();
+                watermelon.draw();
+
+                // バスケットとの衝突判定
+                if (checkCollision(watermelon, basket)) {
+                    score += 10;
+                    scoreElement.textContent = score;
+                    watermelons.splice(i, 1);
+                    i--;
+
+                    // スコアに応じてスイカの速度を上げる
+                    if (score % 100 === 0) {
+                        fallSpeed += 0.5;
+                    }
+
+                    continue;
+                }
+
+                // 画面外に出たスイカ
+                if (watermelon.y - watermelon.size / 2 > GAME_HEIGHT) {
+                    lives--;
+                    livesElement.textContent = lives;
+                    watermelons.splice(i, 1);
+                    i--;
+
+                    if (lives <= 0) {
+                        endGame();
+                    }
+                }
+            }
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // キーボード操作
+        document.addEventListener('keydown', (event) => {
+            if (event.code === 'ArrowLeft') {
+                basket.moveLeft();
+            }
+            if (event.code === 'ArrowRight') {
+                basket.moveRight();
+            }
+        });
+
+        // リスタートボタンのイベントリスナー
+        restartButton.addEventListener('click', () => {
+            resetGame();
+            spawnWatermelon();
+            gameLoop();
+        });
+
+        // ゲーム開始
+        setInterval(spawnWatermelon, 1500);
+        gameLoop();
+    </script>
+</body>
+</html>
