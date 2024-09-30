@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Browser Fighting Game</title>
+    <title>Speedy Racer</title>
     <style>
         body {
             margin: 0;
@@ -12,370 +12,183 @@
             justify-content: center;
             align-items: center;
             height: 100vh;
-            background-color: #000;
+            background-color: #f0f0f0;
             font-family: Arial, sans-serif;
-            overflow: hidden;
         }
         #gameContainer {
             position: relative;
-            width: 100%;
-            max-width: 800px;
-            height: 100vh;
-            max-height: 400px;
-        }
-        #gameCanvas {
-            width: 100%;
-            height: 100%;
+            width: 300px;
+            height: 500px;
             background-color: #333;
+            overflow: hidden;
         }
-        #startScreen, #gameOverScreen {
+        #car {
+            position: absolute;
+            width: 40px;
+            height: 60px;
+            background-color: red;
+            bottom: 20px;
+            transition: left 0.1s;
+        }
+        .obstacle {
+            position: absolute;
+            width: 40px;
+            height: 60px;
+            background-color: blue;
+        }
+        #score {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+        }
+        #startScreen {
             position: absolute;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
             display: flex;
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            background-color: rgba(0, 0, 0, 0.8);
-            color: #fff;
+            color: white;
         }
-        button {
+        #startButton {
             padding: 10px 20px;
             font-size: 18px;
-            background-color: #4CAF50;
-            color: white;
-            border: none;
             cursor: pointer;
-            margin-top: 20px;
-        }
-        button:hover {
-            background-color: #45a049;
-        }
-        #healthBars {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            right: 10px;
-            display: flex;
-            justify-content: space-between;
-        }
-        .healthBar {
-            width: 45%;
-            height: 20px;
-            background-color: #f00;
-        }
-        #mobileControls {
-            position: absolute;
-            bottom: 10px;
-            left: 0;
-            width: 100%;
-            display: none;
-            justify-content: space-between;
-        }
-        .mobileBtn {
-            width: 60px;
-            height: 60px;
-            background-color: rgba(255, 255, 255, 0.3);
-            border-radius: 50%;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            font-size: 24px;
-            color: #fff;
         }
     </style>
 </head>
 <body>
     <div id="gameContainer">
-        <canvas id="gameCanvas"></canvas>
-        <div id="healthBars">
-            <div id="player1Health" class="healthBar"></div>
-            <div id="player2Health" class="healthBar"></div>
-        </div>
+        <div id="car"></div>
+        <div id="score">Score: 0</div>
         <div id="startScreen">
-            <h1>Browser Fighting Game</h1>
-            <p>Player 1: A (left), D (right), W (jump), S (attack)</p>
-            <p>Player 2: ← (left), → (right), ↑ (jump), ↓ (attack)</p>
+            <h1>Speedy Racer</h1>
             <button id="startButton">Start Game</button>
-        </div>
-        <div id="gameOverScreen" style="display: none;">
-            <h1>Game Over</h1>
-            <p id="winner"></p>
-            <button id="restartButton">Play Again</button>
-        </div>
-        <div id="mobileControls">
-            <div>
-                <div id="leftBtn1" class="mobileBtn">←</div>
-                <div id="rightBtn1" class="mobileBtn">→</div>
-            </div>
-            <div>
-                <div id="jumpBtn1" class="mobileBtn">↑</div>
-                <div id="attackBtn1" class="mobileBtn">A</div>
-            </div>
-            <div>
-                <div id="leftBtn2" class="mobileBtn">←</div>
-                <div id="rightBtn2" class="mobileBtn">→</div>
-            </div>
-            <div>
-                <div id="jumpBtn2" class="mobileBtn">↑</div>
-                <div id="attackBtn2" class="mobileBtn">A</div>
-            </div>
         </div>
     </div>
 
     <script>
-        // Get DOM elements
-        const canvas = document.getElementById('gameCanvas');
-        const ctx = canvas.getContext('2d');
-        const startScreen = document.getElementById('startScreen');
-        const gameOverScreen = document.getElementById('gameOverScreen');
-        const startButton = document.getElementById('startButton');
-        const restartButton = document.getElementById('restartButton');
-        const winnerElement = document.getElementById('winner');
-        const player1HealthBar = document.getElementById('player1Health');
-        const player2HealthBar = document.getElementById('player2Health');
-        const mobileControls = document.getElementById('mobileControls');
-
         // Game variables
+        let car;
+        let gameContainer;
+        let score = 0;
         let gameLoop;
-        let player1, player2;
-        let gameActive = false;
+        let obstacles = [];
+        let isGameRunning = false;
 
-        // Player class
-        class Player {
-            constructor(x, y, color, controls) {
-                this.x = x;
-                this.y = y;
-                this.width = 50;
-                this.height = 100;
-                this.color = color;
-                this.speed = 5;
-                this.jumpForce = 15;
-                this.yVelocity = 0;
-                this.health = 100;
-                this.isJumping = false;
-                this.isAttacking = false;
-                this.attackCooldown = 0;
-                this.controls = controls;
-            }
+        // Initialize the game
+        function init() {
+            car = document.getElementById('car');
+            gameContainer = document.getElementById('gameContainer');
+            document.getElementById('startButton').addEventListener('click', startGame);
 
-            draw() {
-                ctx.fillStyle = this.color;
-                ctx.fillRect(this.x, this.y, this.width, this.height);
-            }
-
-            move(direction) {
-                if (direction === 'left') {
-                    this.x -= this.speed;
-                } else if (direction === 'right') {
-                    this.x += this.speed;
-                }
-                // Keep player within canvas bounds
-                this.x = Math.max(0, Math.min(canvas.width - this.width, this.x));
-            }
-
-            jump() {
-                if (!this.isJumping) {
-                    this.yVelocity = -this.jumpForce;
-                    this.isJumping = true;
-                }
-            }
-
-            attack() {
-                if (this.attackCooldown === 0) {
-                    this.isAttacking = true;
-                    this.attackCooldown = 20; // Set cooldown frames
-                }
-            }
-
-            update() {
-                // Apply gravity
-                this.yVelocity += 0.8;
-                this.y += this.yVelocity;
-
-                // Floor collision
-                if (this.y + this.height > canvas.height) {
-                    this.y = canvas.height - this.height;
-                    this.yVelocity = 0;
-                    this.isJumping = false;
-                }
-
-                // Update attack state
-                if (this.isAttacking) {
-                    this.isAttacking = false;
-                }
-                if (this.attackCooldown > 0) {
-                    this.attackCooldown--;
-                }
-            }
-        }
-
-        // Set up the game
-        function setupGame() {
-            canvas.width = canvas.offsetWidth;
-            canvas.height = canvas.offsetHeight;
-
-            player1 = new Player(50, canvas.height - 100, '#00f', {
-                left: 'KeyA',
-                right: 'KeyD',
-                jump: 'KeyW',
-                attack: 'KeyS'
-            });
-            player2 = new Player(canvas.width - 100, canvas.height - 100, '#f00', {
-                left: 'ArrowLeft',
-                right: 'ArrowRight',
-                jump: 'ArrowUp',
-                attack: 'ArrowDown'
-            });
-        }
-
-        // Draw game objects
-        function draw() {
-            ctx.fillStyle = '#333';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            player1.draw();
-            player2.draw();
-
-            // Draw attack indicators
-            if (player1.isAttacking) {
-                ctx.fillStyle = 'yellow';
-                ctx.fillRect(player1.x + player1.width, player1.y, 20, player1.height);
-            }
-            if (player2.isAttacking) {
-                ctx.fillStyle = 'yellow';
-                ctx.fillRect(player2.x - 20, player2.y, 20, player2.height);
-            }
-        }
-
-        // Update game state
-        function update() {
-            player1.update();
-            player2.update();
-
-            // Check for attacks
-            if (player1.isAttacking && isColliding(player1, player2)) {
-                player2.health -= 10;
-                updateHealthBars();
-            }
-            if (player2.isAttacking && isColliding(player2, player1)) {
-                player1.health -= 10;
-                updateHealthBars();
-            }
-
-            // Check for game over
-            if (player1.health <= 0 || player2.health <= 0) {
-                endGame();
-            }
-        }
-
-        // Check collision between two players
-        function isColliding(attacker, defender) {
-            return (
-                attacker.x < defender.x + defender.width &&
-                attacker.x + attacker.width > defender.x &&
-                attacker.y < defender.y + defender.height &&
-                attacker.y + attacker.height > defender.y
-            );
-        }
-
-        // Update health bars
-        function updateHealthBars() {
-            player1HealthBar.style.width = `${player1.health}%`;
-            player2HealthBar.style.width = `${player2.health}%`;
-        }
-
-        // Game loop
-        function gameStep() {
-            update();
-            draw();
-            gameLoop = requestAnimationFrame(gameStep);
+            // Add touch and mouse event listeners
+            gameContainer.addEventListener('touchmove', moveCar);
+            gameContainer.addEventListener('mousemove', moveCar);
         }
 
         // Start the game
         function startGame() {
-            startScreen.style.display = 'none';
-            setupGame();
-            gameActive = true;
-            updateHealthBars();
-            gameLoop = requestAnimationFrame(gameStep);
+            if (isGameRunning) return;
+            isGameRunning = true;
+            score = 0;
+            updateScore();
+            document.getElementById('startScreen').style.display = 'none';
+            gameLoop = setInterval(updateGame, 20);
+            setInterval(createObstacle, 2000);
         }
 
-        // End the game
-        function endGame() {
-            cancelAnimationFrame(gameLoop);
-            gameActive = false;
-            gameOverScreen.style.display = 'flex';
-            winnerElement.textContent = player1.health <= 0 ? "Player 2 Wins!" : "Player 1 Wins!";
+        // Move the car based on touch or mouse position
+        function moveCar(e) {
+            if (!isGameRunning) return;
+            let xPos;
+            if (e.type === 'touchmove') {
+                xPos = e.touches[0].clientX - gameContainer.offsetLeft;
+            } else {
+                xPos = e.clientX - gameContainer.offsetLeft;
+            }
+            let carWidth = car.offsetWidth;
+            let containerWidth = gameContainer.offsetWidth;
+            let newPos = Math.max(0, Math.min(xPos - carWidth / 2, containerWidth - carWidth));
+            car.style.left = newPos + 'px';
         }
 
-        // Restart the game
-        function restartGame() {
-            gameOverScreen.style.display = 'none';
-            startGame();
+        // Create a new obstacle
+        function createObstacle() {
+            if (!isGameRunning) return;
+            let obstacle = document.createElement('div');
+            obstacle.className = 'obstacle';
+            obstacle.style.left = Math.random() * (gameContainer.offsetWidth - 40) + 'px';
+            obstacle.style.top = '-60px';
+            gameContainer.appendChild(obstacle);
+            obstacles.push(obstacle);
         }
 
-        // Event listeners
-        startButton.addEventListener('click', startGame);
-        restartButton.addEventListener('click', restartGame);
+        // Update game state
+        function updateGame() {
+            moveObstacles();
+            checkCollision();
+            removeOffscreenObstacles();
+            score++;
+            updateScore();
+        }
 
-        // Keyboard controls
-        document.addEventListener('keydown', (e) => {
-            if (!gameActive) return;
-
-            if (e.code === player1.controls.left) player1.move('left');
-            if (e.code === player1.controls.right) player1.move('right');
-            if (e.code === player1.controls.jump) player1.jump();
-            if (e.code === player1.controls.attack) player1.attack();
-
-            if (e.code === player2.controls.left) player2.move('left');
-            if (e.code === player2.controls.right) player2.move('right');
-            if (e.code === player2.controls.jump) player2.jump();
-            if (e.code === player2.controls.attack) player2.attack();
-        });
-
-        // Mobile controls
-        function setupMobileControls() {
-            mobileControls.style.display = 'flex';
-            
-            const controls = [
-                { id: 'leftBtn1', action: () => player1.move('left') },
-                { id: 'rightBtn1', action: () => player1.move('right') },
-                { id: 'jumpBtn1', action: () => player1.jump() },
-                { id: 'attackBtn1', action: () => player1.attack() },
-                { id: 'leftBtn2', action: () => player2.move('left') },
-                { id: 'rightBtn2', action: () => player2.move('right') },
-                { id: 'jumpBtn2', action: () => player2.jump() },
-                { id: 'attackBtn2', action: () => player2.attack() }
-            ];
-
-            controls.forEach(control => {
-                const button = document.getElementById(control.id);
-                ['touchstart', 'mousedown'].forEach(eventType => {
-                    button.addEventListener(eventType, (e) => {
-                        e.preventDefault();
-                        if (gameActive) control.action();
-                    });
-                });
+        // Move obstacles down
+        function moveObstacles() {
+            obstacles.forEach(obstacle => {
+                obstacle.style.top = (obstacle.offsetTop + 5) + 'px';
             });
         }
 
-        // Check if it's a mobile device
-        if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
-            setupMobileControls();
+        // Check for collision between car and obstacles
+        function checkCollision() {
+            let carRect = car.getBoundingClientRect();
+            obstacles.forEach(obstacle => {
+                let obstacleRect = obstacle.getBoundingClientRect();
+                if (
+                    carRect.left < obstacleRect.right &&
+                    carRect.right > obstacleRect.left &&
+                    carRect.top < obstacleRect.bottom &&
+                    carRect.bottom > obstacleRect.top
+                ) {
+                    gameOver();
+                }
+            });
         }
 
-        // Handle window resize
-        window.addEventListener('resize', () => {
-            if (gameActive) {
-                setupGame();
-            }
-        });
+        // Remove obstacles that have moved off screen
+        function removeOffscreenObstacles() {
+            obstacles = obstacles.filter(obstacle => {
+                if (obstacle.offsetTop > gameContainer.offsetHeight) {
+                    gameContainer.removeChild(obstacle);
+                    return false;
+                }
+                return true;
+            });
+        }
 
-        // Initial setup
-        setupGame();
+        // Update the score display
+        function updateScore() {
+            document.getElementById('score').innerText = 'Score: ' + score;
+        }
+
+        // End the game
+        function gameOver() {
+            isGameRunning = false;
+            clearInterval(gameLoop);
+            obstacles.forEach(obstacle => gameContainer.removeChild(obstacle));
+            obstacles = [];
+            alert('Game Over! Your score: ' + score);
+            document.getElementById('startScreen').style.display = 'flex';
+        }
+
+        // Initialize the game when the page loads
+        window.onload = init;
     </script>
 </body>
 </html>
