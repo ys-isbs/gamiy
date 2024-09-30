@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Gungi Battle</title>
+    <title>Atari Ping Pong</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
         /* Reset default styles */
@@ -12,275 +12,359 @@
             box-sizing: border-box;
         }
 
+        /* Body styling */
         body {
-            background-color: #2c3e50;
-            font-family: Arial, sans-serif;
+            background-color: #000;
             display: flex;
             justify-content: center;
             align-items: center;
             height: 100vh;
-        }
-
-        #gameContainer {
-            width: 90vmin;
-            height: 90vmin;
-            max-width: 800px;
-            max-height: 800px;
-            background-color: #ecf0f1;
-            border: 2px solid #34495e;
-            position: relative;
-            touch-action: manipulation;
-        }
-
-        #board {
-            width: 100%;
-            height: 100%;
-            display: grid;
-            grid-template-columns: repeat(9, 1fr);
-            grid-template-rows: repeat(9, 1fr);
-            gap: 2px;
-            background-color: #34495e;
-        }
-
-        .cell {
-            background-color: #ecf0f1;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
             position: relative;
         }
 
-        .cell:hover {
-            background-color: #bdc3c7;
-            cursor: pointer;
-        }
-
-        .piece {
-            width: 80%;
-            height: 80%;
-            border-radius: 50%;
-            position: absolute;
-            top: 10%;
-            left: 10%;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            font-weight: bold;
-            color: #fff;
-            user-select: none;
-        }
-
-        .player1 {
-            background-color: #e74c3c;
-        }
-
-        .player2 {
-            background-color: #3498db;
-        }
-
-        #infoPanel {
-            position: absolute;
-            top: 10px;
-            left: 50%;
-            transform: translateX(-50%);
-            background-color: rgba(44, 62, 80, 0.8);
-            color: #ecf0f1;
-            padding: 10px 20px;
+        /* Game Canvas */
+        canvas {
+            background-color: #111;
+            border: 2px solid #fff;
             border-radius: 10px;
-            font-size: 1.2em;
-            z-index: 10;
         }
 
-        #restartButton {
+        /* Score Display */
+        #scoreBoard {
             position: absolute;
-            bottom: 10px;
+            top: 20px;
+            width: 100%;
+            text-align: center;
+            color: #fff;
+            font-size: 24px;
+            z-index: 1;
+        }
+
+        /* Start/Restart Button */
+        #startButton {
+            position: absolute;
+            top: 50%;
             left: 50%;
-            transform: translateX(-50%);
-            background-color: #27ae60;
-            color: #ecf0f1;
+            transform: translate(-50%, -50%);
+            background-color: #fff;
+            color: #000;
             border: none;
-            padding: 10px 20px;
+            padding: 15px 30px;
+            font-size: 20px;
             border-radius: 5px;
-            font-size: 1em;
             cursor: pointer;
+            z-index: 2;
         }
 
-        #restartButton:hover {
-            background-color: #2ecc71;
+        #startButton:hover {
+            background-color: #ddd;
         }
 
-        /* Responsive Design */
-        @media (max-width: 600px) {
-            #infoPanel {
-                font-size: 1em;
-                padding: 8px 16px;
-            }
+        /* Mobile Controls */
+        .control-button {
+            position: absolute;
+            bottom: 20px;
+            width: 60px;
+            height: 60px;
+            background-color: rgba(255, 255, 255, 0.7);
+            border: none;
+            border-radius: 50%;
+            font-size: 30px;
+            cursor: pointer;
+            display: none; /* Hidden on desktop */
+            align-items: center;
+            justify-content: center;
+        }
 
-            #restartButton {
-                font-size: 0.9em;
-                padding: 8px 16px;
+        /* Show controls on touch devices */
+        @media (pointer: coarse) {
+            .control-button {
+                display: flex;
             }
+        }
+
+        /* Positioning Mobile Control Buttons */
+        #leftButton {
+            left: 20px;
+        }
+
+        #rightButton {
+            left: 100px;
         }
     </style>
 </head>
 <body>
-    <div id="gameContainer">
-        <div id="infoPanel">Player 1's Turn</div>
-        <div id="board"></div>
-        <button id="restartButton">Restart Game</button>
-    </div>
+    <!-- Score Display -->
+    <div id="scoreBoard">Player 1: 0 | Player 2: 0</div>
+
+    <!-- Start/Restart Button -->
+    <button id="startButton">Start Game</button>
+
+    <!-- Game Canvas -->
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+
+    <!-- Mobile Control Buttons -->
+    <button id="leftButton" class="control-button">◀</button>
+    <button id="rightButton" class="control-button">▶</button>
 
     <script>
-        // Game Constants
-        const BOARD_SIZE = 9;
-        const PLAYER1 = 'player1';
-        const PLAYER2 = 'player2';
+        // Get DOM Elements
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreBoard = document.getElementById('scoreBoard');
+        const startButton = document.getElementById('startButton');
+        const leftButton = document.getElementById('leftButton');
+        const rightButton = document.getElementById('rightButton');
 
-        // Game State
-        let currentPlayer = PLAYER1;
-        let boardState = []; // 2D Array to represent the board
-        let selectedPiece = null;
+        // Game Variables
+        let animationId;
+        let isGameRunning = false;
 
-        // Initialize Board State
-        for (let i = 0; i < BOARD_SIZE; i++) {
-            boardState[i] = [];
-            for (let j = 0; j < BOARD_SIZE; j++) {
-                boardState[i][j] = null;
+        // Scores
+        let scorePlayer1 = 0;
+        let scorePlayer2 = 0;
+
+        // Paddle Class
+        class Paddle {
+            constructor(x, y, width, height, color, upKey, downKey) {
+                this.x = x;
+                this.y = y;
+                this.width = width;
+                this.height = height;
+                this.color = color;
+                this.speed = 7;
+                this.moveUp = false;
+                this.moveDown = false;
+                this.touchMoveLeft = false;
+                this.touchMoveRight = false;
             }
-        }
 
-        // Initial Piece Placement (Example)
-        // Player 1 pieces on bottom
-        boardState[BOARD_SIZE - 1][4] = { owner: PLAYER1, type: 'King' };
-        boardState[BOARD_SIZE - 2][3] = { owner: PLAYER1, type: 'Knight' };
-        boardState[BOARD_SIZE - 2][5] = { owner: PLAYER1, type: 'Knight' };
-
-        // Player 2 pieces on top
-        boardState[0][4] = { owner: PLAYER2, type: 'King' };
-        boardState[1][3] = { owner: PLAYER2, type: 'Knight' };
-        boardState[1][5] = { owner: PLAYER2, type: 'Knight' };
-
-        // Reference to DOM Elements
-        const boardElement = document.getElementById('board');
-        const infoPanel = document.getElementById('infoPanel');
-        const restartButton = document.getElementById('restartButton');
-
-        // Create Board Cells
-        for (let row = 0; row < BOARD_SIZE; row++) {
-            for (let col = 0; col < BOARD_SIZE; col++) {
-                const cell = document.createElement('div');
-                cell.classList.add('cell');
-                cell.dataset.row = row;
-                cell.dataset.col = col;
-                cell.addEventListener('click', onCellClick);
-                boardElement.appendChild(cell);
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.fillRect(this.x, this.y, this.width, this.height);
             }
-        }
 
-        // Render the Board
-        function renderBoard() {
-            const cells = document.querySelectorAll('.cell');
-            cells.forEach(cell => {
-                const row = parseInt(cell.dataset.row);
-                const col = parseInt(cell.dataset.col);
-                cell.innerHTML = ''; // Clear previous content
-
-                const piece = boardState[row][col];
-                if (piece) {
-                    const pieceElement = document.createElement('div');
-                    pieceElement.classList.add('piece', piece.owner);
-                    pieceElement.textContent = getPieceSymbol(piece.type);
-                    cell.appendChild(pieceElement);
+            update() {
+                if (this.moveUp) {
+                    this.y -= this.speed;
+                }
+                if (this.moveDown) {
+                    this.y += this.speed;
                 }
 
-                // Highlight selected piece
-                if (selectedPiece && selectedPiece.row === row && selectedPiece.col === col) {
-                    cell.style.boxShadow = '0 0 10px 5px #f1c40f';
-                } else {
-                    cell.style.boxShadow = 'none';
-                }
-            });
-        }
+                // Prevent paddle from going out of bounds
+                if (this.y < 0) this.y = 0;
+                if (this.y + this.height > canvas.height) this.y = canvas.height - this.height;
+            }
 
-        // Get Piece Symbol
-        function getPieceSymbol(type) {
-            switch(type) {
-                case 'King':
-                    return 'K';
-                case 'Knight':
-                    return 'N';
-                default:
-                    return '';
+            // For Mobile Controls
+            mobileMove(direction) {
+                if (direction === 'left') {
+                    this.y -= this.speed;
+                } else if (direction === 'right') {
+                    this.y += this.speed;
+                }
+
+                // Prevent paddle from going out of bounds
+                if (this.y < 0) this.y = 0;
+                if (this.y + this.height > canvas.height) this.y = canvas.height - this.height;
             }
         }
 
-        // Handle Cell Click
-        function onCellClick(e) {
-            const row = parseInt(e.currentTarget.dataset.row);
-            const col = parseInt(e.currentTarget.dataset.col);
-            const clickedPiece = boardState[row][col];
-
-            if (selectedPiece) {
-                // If a piece is selected, attempt to move
-                if (isValidMove(selectedPiece, row, col)) {
-                    // Move the piece
-                    boardState[row][col] = boardState[selectedPiece.row][selectedPiece.col];
-                    boardState[selectedPiece.row][selectedPiece.col] = null;
-
-                    // Check for capture
-                    if (clickedPiece && clickedPiece.owner !== currentPlayer) {
-                        alert(`${currentPlayer === PLAYER1 ? 'Player 1' : 'Player 2'} captured ${clickedPiece.type}!`);
-                    }
-
-                    // Switch Player
-                    currentPlayer = currentPlayer === PLAYER1 ? PLAYER2 : PLAYER1;
-                    infoPanel.textContent = `${currentPlayer === PLAYER1 ? "Player 1's" : "Player 2's"} Turn`;
-                }
-
-                // Deselect after attempting move
-                selectedPiece = null;
-            } else if (clickedPiece && clickedPiece.owner === currentPlayer) {
-                // Select the piece if it belongs to the current player
-                selectedPiece = { row, col };
+        // Ball Class
+        class Ball {
+            constructor(x, y, radius, color) {
+                this.x = x;
+                this.y = y;
+                this.radius = radius;
+                this.color = color;
+                this.speed = 5;
+                this.velocityX = this.speed;
+                this.velocityY = this.speed;
             }
 
-            renderBoard();
-        }
-
-        // Validate Move (Simple Example: Move to adjacent cells)
-        function isValidMove(piece, destRow, destCol) {
-            const dRow = Math.abs(destRow - piece.row);
-            const dCol = Math.abs(destCol - piece.col);
-
-            // Example Rule: Move to adjacent cell only
-            return (dRow <= 1 && dCol <= 1);
-        }
-
-        // Restart Game
-        restartButton.addEventListener('click', () => {
-            // Reset Game State
-            currentPlayer = PLAYER1;
-            infoPanel.textContent = "Player 1's Turn";
-            selectedPiece = null;
-
-            // Clear Board
-            for (let i = 0; i < BOARD_SIZE; i++) {
-                for (let j = 0; j < BOARD_SIZE; j++) {
-                    boardState[i][j] = null;
-                }
+            draw() {
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fillStyle = this.color;
+                ctx.fill();
+                ctx.closePath();
             }
 
-            // Reinitialize Pieces
-            boardState[BOARD_SIZE - 1][4] = { owner: PLAYER1, type: 'King' };
-            boardState[BOARD_SIZE - 2][3] = { owner: PLAYER1, type: 'Knight' };
-            boardState[BOARD_SIZE - 2][5] = { owner: PLAYER1, type: 'Knight' };
+            update(paddle1, paddle2) {
+                this.x += this.velocityX;
+                this.y += this.velocityY;
 
-            boardState[0][4] = { owner: PLAYER2, type: 'King' };
-            boardState[1][3] = { owner: PLAYER2, type: 'Knight' };
-            boardState[1][5] = { owner: PLAYER2, type: 'Knight' };
+                // Top and Bottom Collision
+                if (this.y - this.radius < 0 || this.y + this.radius > canvas.height) {
+                    this.velocityY = -this.velocityY;
+                }
 
-            renderBoard();
+                // Paddle Collision
+                if (this.x - this.radius < paddle1.x + paddle1.width &&
+                    this.y > paddle1.y &&
+                    this.y < paddle1.y + paddle1.height) {
+                    this.velocityX = -this.velocityX;
+                    this.x = paddle1.x + paddle1.width + this.radius; // Prevent sticking
+                }
+
+                if (this.x + this.radius > paddle2.x &&
+                    this.y > paddle2.y &&
+                    this.y < paddle2.y + paddle2.height) {
+                    this.velocityX = -this.velocityX;
+                    this.x = paddle2.x - this.radius; // Prevent sticking
+                }
+
+                // Left and Right Goals
+                if (this.x - this.radius < 0) {
+                    scorePlayer2++;
+                    updateScore();
+                    resetBall();
+                }
+
+                if (this.x + this.radius > canvas.width) {
+                    scorePlayer1++;
+                    updateScore();
+                    resetBall();
+                }
+            }
+        }
+
+        // Initialize Paddles and Ball
+        const paddleWidth = 20;
+        const paddleHeight = 100;
+        const paddle1 = new Paddle(30, canvas.height / 2 - paddleHeight / 2, paddleWidth, paddleHeight, '#fff', 'w', 's');
+        const paddle2 = new Paddle(canvas.width - 30 - paddleWidth, canvas.height / 2 - paddleHeight / 2, paddleWidth, paddleHeight, '#fff', 'ArrowUp', 'ArrowDown');
+        const ball = new Ball(canvas.width / 2, canvas.height / 2, 10, '#fff');
+
+        // Update Score Display
+        function updateScore() {
+            scoreBoard.textContent = `Player 1: ${scorePlayer1} | Player 2: ${scorePlayer2}`;
+        }
+
+        // Reset Ball to Center
+        function resetBall() {
+            ball.x = canvas.width / 2;
+            ball.y = canvas.height / 2;
+            // Randomize initial direction
+            ball.velocityX = ball.speed * (Math.random() > 0.5 ? 1 : -1);
+            ball.velocityY = ball.speed * (Math.random() > 0.5 ? 1 : -1);
+        }
+
+        // Handle Keyboard Input
+        const keys = {};
+
+        window.addEventListener('keydown', function(e) {
+            keys[e.code] = true;
+            // Prevent default scrolling for arrow keys and space
+            if(['ArrowUp','ArrowDown','Space'].includes(e.code)) {
+                e.preventDefault();
+            }
         });
 
-        // Initial Render
-        renderBoard();
+        window.addEventListener('keyup', function(e) {
+            keys[e.code] = false;
+        });
+
+        // Handle Mobile Button Presses
+        leftButton.addEventListener('touchstart', function(e) {
+            e.preventDefault();
+            paddle1.mobileMove('left');
+        });
+
+        rightButton.addEventListener('touchstart', function(e) {
+            e.preventDefault();
+            paddle1.mobileMove('right');
+        });
+
+        // Main Game Loop
+        function gameLoop() {
+            // Clear Canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Update Paddles based on keys
+            if (keys['ArrowUp'] || keys['KeyW']) {
+                paddle1.moveUp = true;
+            } else {
+                paddle1.moveUp = false;
+            }
+
+            if (keys['ArrowDown'] || keys['KeyS']) {
+                paddle1.moveDown = true;
+            } else {
+                paddle1.moveDown = false;
+            }
+
+            if (keys['ArrowUp']) {
+                paddle2.moveUp = true;
+            } else {
+                paddle2.moveUp = false;
+            }
+
+            if (keys['ArrowDown']) {
+                paddle2.moveDown = true;
+            } else {
+                paddle2.moveDown = false;
+            }
+
+            // Update and Draw Paddles
+            paddle1.update();
+            paddle2.update();
+            paddle1.draw();
+            paddle2.draw();
+
+            // Update and Draw Ball
+            ball.update(paddle1, paddle2);
+            ball.draw();
+
+            // Continue the loop
+            animationId = requestAnimationFrame(gameLoop);
+        }
+
+        // Start Game
+        startButton.addEventListener('click', function() {
+            if (!isGameRunning) {
+                isGameRunning = true;
+                startButton.style.display = 'none';
+                resetBall();
+                gameLoop();
+            } else {
+                // Restart the game
+                scorePlayer1 = 0;
+                scorePlayer2 = 0;
+                updateScore();
+                resetBall();
+            }
+        });
+
+        // Initialize Score
+        updateScore();
+
+        // Prevent scrolling on touch devices when using controls
+        window.addEventListener('touchmove', function(e) {
+            e.preventDefault();
+        }, { passive: false });
+
+        // Responsive Canvas
+        function resizeCanvas() {
+            const aspectRatio = 4 / 3;
+            let width = window.innerWidth;
+            let height = window.innerHeight;
+
+            if (width / height > aspectRatio) {
+                width = height * aspectRatio;
+            } else {
+                height = width / aspectRatio;
+            }
+
+            canvas.style.width = `${width * 0.9}px`;
+            canvas.style.height = `${height * 0.9}px`;
+        }
+
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
     </script>
 </body>
 </html>
