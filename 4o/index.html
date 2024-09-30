@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>2D Fighting Game</title>
+    <title>Racing Game</title>
     <style>
         * {
             margin: 0;
@@ -12,7 +12,7 @@
         }
         body {
             font-family: Arial, sans-serif;
-            background-color: #000;
+            background-color: #222;
             color: #fff;
             display: flex;
             justify-content: center;
@@ -22,250 +22,194 @@
         }
         #gameCanvas {
             background-color: #333;
-            width: 100vw;
-            height: 80vh;
+            border: 2px solid #fff;
+        }
+        #scoreBoard {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
         }
         #controls {
+            position: absolute;
+            bottom: 20px;
             width: 100vw;
             display: flex;
-            justify-content: space-between;
-            padding: 10px;
-            color: #fff;
+            justify-content: center;
+            gap: 20px;
         }
-        #controls div {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-        #controls button {
-            margin: 5px;
-            padding: 10px;
-            font-size: 18px;
+        button {
+            width: 50px;
+            height: 50px;
+            background-color: #555;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            font-size: 20px;
+            text-align: center;
             cursor: pointer;
-        }
-        .healthBar {
-            width: 100px;
-            height: 20px;
-            background-color: red;
         }
     </style>
 </head>
 <body>
 
-<canvas id="gameCanvas"></canvas>
+<canvas id="gameCanvas" width="800" height="600"></canvas>
+<div id="scoreBoard">Lap Time: <span id="lapTime">0</span>s | Best Time: <span id="bestTime">N/A</span>s</div>
 
+<!-- Mobile controls -->
 <div id="controls">
-    <div>
-        <p>Player 1 Health</p>
-        <div class="healthBar" id="healthP1"></div>
-    </div>
-    <div>
-        <p>Player 2 Health</p>
-        <div class="healthBar" id="healthP2"></div>
-    </div>
+    <button id="left">◀️</button>
+    <button id="up">▲</button>
+    <button id="right">▶️</button>
 </div>
 
 <script>
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
+    const lapTimeDisplay = document.getElementById('lapTime');
+    const bestTimeDisplay = document.getElementById('bestTime');
 
-    // Player health elements
-    const healthP1 = document.getElementById('healthP1');
-    const healthP2 = document.getElementById('healthP2');
+    let car = {
+        x: canvas.width / 2 - 20,
+        y: canvas.height - 100,
+        width: 40,
+        height: 60,
+        angle: 0,
+        speed: 0,
+        maxSpeed: 5,
+        accel: 0.2,
+        friction: 0.05
+    };
 
-    // Game settings
-    const gravity = 1;
-    const groundLevel = canvas.height - 100;
-    const playerWidth = 50;
-    const playerHeight = 100;
+    let keys = {};
+    let obstacles = [];
+    let startTime = null;
+    let lapTime = 0;
+    let bestTime = null;
     let gameOver = false;
 
-    // Player setup
-    class Player {
-        constructor(x, color, controls) {
-            this.x = x;
-            this.y = groundLevel;
-            this.width = playerWidth;
-            this.height = playerHeight;
-            this.color = color;
-            this.health = 100;
-            this.isJumping = false;
-            this.isBlocking = false;
-            this.controls = controls;
-            this.velocity = { x: 0, y: 0 };
+    // Generate obstacles
+    function generateObstacles() {
+        for (let i = 0; i < 5; i++) {
+            const obstacle = {
+                x: Math.random() * (canvas.width - 100) + 50,
+                y: Math.random() * (canvas.height - 200) + 100,
+                width: 50,
+                height: 50
+            };
+            obstacles.push(obstacle);
+        }
+    }
+
+    generateObstacles();
+
+    // Event listeners for controls
+    document.addEventListener('keydown', (e) => keys[e.key] = true);
+    document.addEventListener('keyup', (e) => keys[e.key] = false);
+
+    // Mobile controls
+    document.getElementById('left').addEventListener('touchstart', () => keys['ArrowLeft'] = true);
+    document.getElementById('left').addEventListener('touchend', () => keys['ArrowLeft'] = false);
+
+    document.getElementById('up').addEventListener('touchstart', () => keys['ArrowUp'] = true);
+    document.getElementById('up').addEventListener('touchend', () => keys['ArrowUp'] = false);
+
+    document.getElementById('right').addEventListener('touchstart', () => keys['ArrowRight'] = true);
+    document.getElementById('right').addEventListener('touchend', () => keys['ArrowRight'] = false);
+
+    function updateCar() {
+        // Control the car's movement
+        if (keys['ArrowUp']) {
+            car.speed = Math.min(car.speed + car.accel, car.maxSpeed);
+        } else {
+            car.speed = Math.max(car.speed - car.friction, 0);
         }
 
-        draw() {
-            ctx.fillStyle = this.color;
-            ctx.fillRect(this.x, this.y, this.width, this.height);
+        if (keys['ArrowLeft']) {
+            car.angle -= 0.05;
         }
 
-        move() {
-            // Apply gravity
-            this.velocity.y += gravity;
-            this.y += this.velocity.y;
-
-            // Prevent player from falling below the ground
-            if (this.y > groundLevel) {
-                this.y = groundLevel;
-                this.isJumping = false;
-            }
-
-            // Move horizontally
-            this.x += this.velocity.x;
-
-            // Boundaries check
-            if (this.x < 0) this.x = 0;
-            if (this.x + this.width > canvas.width) this.x = canvas.width - this.width;
+        if (keys['ArrowRight']) {
+            car.angle += 0.05;
         }
 
-        // Health management
-        takeDamage(amount) {
-            if (!this.isBlocking) {
-                this.health -= amount;
-                if (this.health <= 0) {
-                    this.health = 0;
-                    gameOver = true;
-                }
-            }
-        }
+        // Update the car's position based on speed and angle
+        car.x += Math.sin(car.angle) * car.speed;
+        car.y -= Math.cos(car.angle) * car.speed;
 
-        // Update health bar
-        updateHealthBar() {
-            if (this.controls.player === 1) {
-                healthP1.style.width = this.health + 'px';
-            } else {
-                healthP2.style.width = this.health + 'px';
+        // Keep car on screen (wrap around)
+        if (car.x < -car.width) car.x = canvas.width;
+        if (car.x > canvas.width) car.x = -car.width;
+        if (car.y < -car.height) car.y = canvas.height;
+        if (car.y > canvas.height) car.y = -car.height;
+    }
+
+    function checkCollisions() {
+        // Check for collision with obstacles
+        for (let obstacle of obstacles) {
+            if (
+                car.x < obstacle.x + obstacle.width &&
+                car.x + car.width > obstacle.x &&
+                car.y < obstacle.y + obstacle.height &&
+                car.y + car.height > obstacle.y
+            ) {
+                // Collision detected, reset the car
+                resetGame();
+                return;
             }
         }
     }
 
-    // Player controls
-    const player1Controls = {
-        left: 'a',
-        right: 'd',
-        jump: 'w',
-        punch: 'f',
-        kick: 'g',
-        block: 'h',
-        player: 1
-    };
+    function resetGame() {
+        // Reset car position and speed
+        car.x = canvas.width / 2 - 20;
+        car.y = canvas.height - 100;
+        car.speed = 0;
+        gameOver = true;
+        bestTimeDisplay.textContent = bestTime ? bestTime.toFixed(2) : 'N/A';
+    }
 
-    const player2Controls = {
-        left: 'ArrowLeft',
-        right: 'ArrowRight',
-        jump: 'ArrowUp',
-        punch: 'k',
-        kick: 'l',
-        block: ';',
-        player: 2
-    };
-
-    // Initialize players
-    const player1 = new Player(100, 'blue', player1Controls);
-    const player2 = new Player(canvas.width - 150, 'red', player2Controls);
-
-    // Track keys being pressed
-    const keys = {};
-
-    document.addEventListener('keydown', (e) => {
-        keys[e.key] = true;
-    });
-
-    document.addEventListener('keyup', (e) => {
-        keys[e.key] = false;
-    });
-
-    // Handle player actions
-    function handlePlayerActions() {
-        // Player 1 actions
-        if (keys[player1.controls.left]) player1.velocity.x = -5;
-        else if (keys[player1.controls.right]) player1.velocity.x = 5;
-        else player1.velocity.x = 0;
-
-        if (keys[player1.controls.jump] && !player1.isJumping) {
-            player1.velocity.y = -15;
-            player1.isJumping = true;
+    function updateTimer() {
+        if (!startTime) {
+            startTime = new Date();
         }
+        const now = new Date();
+        lapTime = (now - startTime) / 1000;
+        lapTimeDisplay.textContent = lapTime.toFixed(2);
+    }
 
-        if (keys[player1.controls.block]) player1.isBlocking = true;
-        else player1.isBlocking = false;
+    function drawCar() {
+        ctx.save();
+        ctx.translate(car.x + car.width / 2, car.y + car.height / 2);
+        ctx.rotate(car.angle);
+        ctx.fillStyle = '#ffcc00';
+        ctx.fillRect(-car.width / 2, -car.height / 2, car.width, car.height);
+        ctx.restore();
+    }
 
-        // Player 2 actions
-        if (keys[player2.controls.left]) player2.velocity.x = -5;
-        else if (keys[player2.controls.right]) player2.velocity.x = 5;
-        else player2.velocity.x = 0;
-
-        if (keys[player2.controls.jump] && !player2.isJumping) {
-            player2.velocity.y = -15;
-            player2.isJumping = true;
-        }
-
-        if (keys[player2.controls.block]) player2.isBlocking = true;
-        else player2.isBlocking = false;
-
-        // Combat logic: Punch and kick detection
-        if (keys[player1.controls.punch] && isColliding(player1, player2)) {
-            player2.takeDamage(10);
-        }
-        if (keys[player1.controls.kick] && isColliding(player1, player2)) {
-            player2.takeDamage(15);
-        }
-
-        if (keys[player2.controls.punch] && isColliding(player2, player1)) {
-            player1.takeDamage(10);
-        }
-        if (keys[player2.controls.kick] && isColliding(player2, player1)) {
-            player1.takeDamage(15);
+    function drawObstacles() {
+        ctx.fillStyle = '#ff0000';
+        for (let obstacle of obstacles) {
+            ctx.fillRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height);
         }
     }
 
-    // Collision detection
-    function isColliding(playerA, playerB) {
-        return (
-            playerA.x < playerB.x + playerB.width &&
-            playerA.x + playerA.width > playerB.x &&
-            playerA.y < playerB.y + playerB.height &&
-            playerA.y + playerA.height > playerB.y
-        );
-    }
+    function gameLoop() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Update game state
-    function updateGame() {
         if (!gameOver) {
-            // Clear canvas
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            // Handle actions
-            handlePlayerActions();
-
-            // Move and draw players
-            player1.move();
-            player2.move();
-            player1.draw();
-            player2.draw();
-
-            // Update health bars
-            player1.updateHealthBar();
-            player2.updateHealthBar();
-
-            // Check for game over
-            if (gameOver) {
-                ctx.font = '40px Arial';
-                ctx.fillStyle = '#fff';
-                ctx.fillText(
-                    `${player1.health <= 0 ? 'Player 2' : 'Player 1'} Wins!`,
-                    canvas.width / 2 - 100,
-                    canvas.height / 2
-                );
-            } else {
-                requestAnimationFrame(updateGame);
-            }
+            updateCar();
+            checkCollisions();
+            updateTimer();
         }
+
+        drawCar();
+        drawObstacles();
+
+        requestAnimationFrame(gameLoop);
     }
 
-    // Start the game loop
-    updateGame();
+    gameLoop();
 </script>
 
 </body>
