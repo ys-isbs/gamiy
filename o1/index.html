@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Browser Fighting Game</title>
+    <title>Browser Racing Game</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
         /* Reset default styles */
@@ -14,7 +14,7 @@
 
         /* Body styling */
         body {
-            background-color: #222;
+            background-color: #444;
             display: flex;
             justify-content: center;
             align-items: center;
@@ -26,7 +26,7 @@
 
         /* Game Canvas */
         canvas {
-            background-color: #333;
+            background-color: #555;
             border: 2px solid #fff;
             border-radius: 10px;
             display: block;
@@ -98,11 +98,11 @@
             left: 100px;
         }
 
-        #jumpButton {
+        #accelerateButton {
             right: 100px;
         }
 
-        #attackButton {
+        #brakeButton {
             right: 20px;
         }
     </style>
@@ -110,8 +110,8 @@
 <body>
     <!-- UI Elements -->
     <div id="ui">
-        <div id="player1Health">Player 1: 100</div>
-        <div id="player2Health">Player 2: 100</div>
+        <div id="speed">Speed: 0 km/h</div>
+        <div id="distance">Distance: 0 m</div>
     </div>
 
     <!-- Start/Restart Button -->
@@ -123,128 +123,87 @@
     <!-- Mobile Control Buttons -->
     <button id="leftButton" class="control-button">◀️</button>
     <button id="rightButton" class="control-button">▶️</button>
-    <button id="jumpButton" class="control-button">⬆️</button>
-    <button id="attackButton" class="control-button">👊</button>
+    <button id="accelerateButton" class="control-button">🚀</button>
+    <button id="brakeButton" class="control-button">🛑</button>
 
     <script>
         // Get DOM Elements
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         const startButton = document.getElementById('startButton');
-        const player1HealthDisplay = document.getElementById('player1Health');
-        const player2HealthDisplay = document.getElementById('player2Health');
+        const speedDisplay = document.getElementById('speed');
+        const distanceDisplay = document.getElementById('distance');
         const leftButton = document.getElementById('leftButton');
         const rightButton = document.getElementById('rightButton');
-        const jumpButton = document.getElementById('jumpButton');
-        const attackButton = document.getElementById('attackButton');
+        const accelerateButton = document.getElementById('accelerateButton');
+        const brakeButton = document.getElementById('brakeButton');
 
         // Game Variables
         let animationId;
         let isGameRunning = false;
-        let score = 0;
+        let speed = 0; // km/h
+        let distance = 0; // meters
+        let lastTime = 0;
 
         // Constants
-        const GRAVITY = 0.5;
-        const FLOOR = canvas.height - 50;
+        const MAX_SPEED = 200; // km/h
+        const ACCELERATION = 5; // km/h per frame
+        const BRAKE_DECELERATION = 10; // km/h per frame
+        const TURN_SPEED = 5; // degrees per frame
 
-        // Player Class
-        class Player {
-            constructor(x, y, color, controls) {
-                this.width = 50;
-                this.height = 50;
+        // Player Car Class
+        class Car {
+            constructor(x, y, width, height, color) {
                 this.x = x;
                 this.y = y;
+                this.width = width;
+                this.height = height;
                 this.color = color;
-                this.velocityX = 0;
-                this.velocityY = 0;
-                this.speed = 5;
-                this.jumpStrength = 15;
-                this.onGround = false;
-                this.health = 100;
-                this.controls = controls; // Object with key bindings
-                this.isAttacking = false;
-                this.attackCooldown = 500; // milliseconds
-                this.canAttack = true;
+                this.angle = 0; // In degrees
+                this.speed = 0; // Current speed
+                this.vx = 0; // Velocity X
+                this.vy = 0; // Velocity Y
             }
 
             draw() {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.angle * Math.PI / 180);
                 ctx.fillStyle = this.color;
-                ctx.fillRect(this.x, this.y, this.width, this.height);
-                
-                // Draw attack box
-                if (this.isAttacking) {
-                    ctx.fillStyle = 'rgba(255, 255, 0, 0.5)';
-                    let attackWidth = 20;
-                    let attackHeight = this.height;
-                    if (this.controls.side === 'left') {
-                        ctx.fillRect(this.x - attackWidth, this.y, attackWidth, attackHeight);
-                    } else {
-                        ctx.fillRect(this.x + this.width, this.y, attackWidth, attackHeight);
-                    }
-                }
+                ctx.fillRect(-this.width / 2, -this.height / 2, this.width, this.height);
+                ctx.restore();
             }
 
-            update(keysPressed) {
-                // Horizontal Movement
-                if (keysPressed[this.controls.left]) {
-                    this.velocityX = -this.speed;
-                } else if (keysPressed[this.controls.right]) {
-                    this.velocityX = this.speed;
-                } else {
-                    this.velocityX = 0;
-                }
+            update() {
+                // Update position based on velocity
+                this.x += this.vx;
+                this.y += this.vy;
 
-                // Jumping
-                if ((keysPressed[this.controls.jump]) && this.onGround) {
-                    this.velocityY = -this.jumpStrength;
-                    this.onGround = false;
+                // Boundary Collision
+                if (this.x < this.width / 2) {
+                    this.x = this.width / 2;
                 }
-
-                // Apply gravity
-                this.velocityY += GRAVITY;
-                this.y += this.velocityY;
-                this.x += this.velocityX;
-
-                // Floor Collision
-                if (this.y + this.height >= FLOOR) {
-                    this.y = FLOOR - this.height;
-                    this.velocityY = 0;
-                    this.onGround = true;
+                if (this.x > canvas.width - this.width / 2) {
+                    this.x = canvas.width - this.width / 2;
                 }
-
-                // Wall Collision
-                if (this.x < 0) {
-                    this.x = 0;
+                if (this.y < this.height / 2) {
+                    this.y = this.height / 2;
                 }
-                if (this.x + this.width > canvas.width) {
-                    this.x = canvas.width - this.width;
-                }
-            }
-
-            attack() {
-                if (this.canAttack) {
-                    this.isAttacking = true;
-                    this.canAttack = false;
-                    setTimeout(() => {
-                        this.isAttacking = false;
-                    }, 200); // Attack duration
-                    setTimeout(() => {
-                        this.canAttack = true;
-                    }, this.attackCooldown); // Cooldown
+                if (this.y > canvas.height - this.height / 2) {
+                    this.y = canvas.height - this.height / 2;
                 }
             }
         }
 
-        // Projectile Class (for attacks)
-        class Projectile {
-            constructor(x, y, direction, color) {
-                this.width = 10;
-                this.height = 5;
+        // Obstacle Class
+        class Obstacle {
+            constructor(x, y, width, height, color, speed) {
                 this.x = x;
                 this.y = y;
-                this.speed = 7;
-                this.direction = direction; // 'left' or 'right'
+                this.width = width;
+                this.height = height;
                 this.color = color;
+                this.speed = speed; // km/h
             }
 
             draw() {
@@ -253,42 +212,24 @@
             }
 
             update() {
-                if (this.direction === 'left') {
-                    this.x -= this.speed;
-                } else {
-                    this.x += this.speed;
-                }
+                // Move obstacle downward based on speed
+                this.y += this.speed / 10; // Adjust scaling as needed
             }
         }
 
-        // Initialize Players
-        const player1 = new Player(100, FLOOR - 50, '#00FF00', {
-            left: 'ArrowLeft',
-            right: 'ArrowRight',
-            jump: 'ArrowUp',
-            attack: 'ArrowDown',
-            side: 'left'
-        });
+        // Initialize Player Car
+        const playerCar = new Car(canvas.width / 2, canvas.height - 70, 50, 100, '#00FF00');
 
-        const player2 = new Player(canvas.width - 150, FLOOR - 50, '#FF0000', {
-            left: 'KeyA',
-            right: 'KeyD',
-            jump: 'KeyW',
-            attack: 'KeyS',
-            side: 'right'
-        });
+        // Obstacle Array
+        let obstacles = [];
 
-        // Array to hold projectiles
-        let projectiles = [];
-
-        // Keys Pressed Object
+        // Handle Keyboard Input
         const keysPressed = {};
 
-        // Event Listeners for Keyboard Controls
         window.addEventListener('keydown', function(e) {
             keysPressed[e.code] = true;
-            // Prevent default behavior for space and arrow keys
-            if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'KeyW', 'KeyA', 'KeyS', 'KeyD'].includes(e.code)) {
+            // Prevent default scrolling for arrow keys and space
+            if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code)) {
                 e.preventDefault();
             }
         });
@@ -297,7 +238,7 @@
             keysPressed[e.code] = false;
         });
 
-        // Event Listeners for Mobile Controls
+        // Handle Mobile Button Presses
         leftButton.addEventListener('touchstart', function(e) {
             e.preventDefault();
             keysPressed['MobileLeft'] = true;
@@ -318,147 +259,95 @@
             keysPressed['MobileRight'] = false;
         });
 
-        jumpButton.addEventListener('touchstart', function(e) {
+        accelerateButton.addEventListener('touchstart', function(e) {
             e.preventDefault();
-            keysPressed['MobileJump'] = true;
+            keysPressed['MobileAccelerate'] = true;
         });
 
-        jumpButton.addEventListener('touchend', function(e) {
+        accelerateButton.addEventListener('touchend', function(e) {
             e.preventDefault();
-            keysPressed['MobileJump'] = false;
+            keysPressed['MobileAccelerate'] = false;
         });
 
-        attackButton.addEventListener('touchstart', function(e) {
+        brakeButton.addEventListener('touchstart', function(e) {
             e.preventDefault();
-            player1.attack();
+            keysPressed['MobileBrake'] = true;
         });
 
-        // Event Listener for Mouse Click on Canvas to Attack
-        canvas.addEventListener('mousedown', function(e) {
-            player1.attack();
-        });
-
-        // Event Listener for Touch on Canvas to Attack
-        canvas.addEventListener('touchstart', function(e) {
+        brakeButton.addEventListener('touchend', function(e) {
             e.preventDefault();
-            player1.attack();
-        }, { passive: false });
-
-        // Update Health Displays
-        function updateHealth() {
-            player1HealthDisplay.textContent = `Player 1: ${player1.health}`;
-            player2HealthDisplay.textContent = `Player 2: ${player2.health}`;
-        }
-
-        // Collision Detection Function
-        function isColliding(rect1, rect2) {
-            return rect1.x < rect2.x + rect2.width &&
-                   rect1.x + rect1.width > rect2.x &&
-                   rect1.y < rect2.y + rect2.height &&
-                   rect1.y + rect1.height > rect2.y;
-        }
-
-        // Game Over Function
-        function gameOver(winner) {
-            isGameRunning = false;
-            cancelAnimationFrame(animationId);
-            alert(`${winner} Wins!`);
-            startButton.style.display = 'block';
-        }
+            keysPressed['MobileBrake'] = false;
+        });
 
         // Game Loop
-        function gameLoop() {
+        function gameLoop(timestamp) {
+            if (!lastTime) lastTime = timestamp;
+            const deltaTime = timestamp - lastTime;
+            lastTime = timestamp;
+
+            // Clear Canvas
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // Update Players
-            player1.update(keysPressed);
-            player2.update(keysPressed);
-            player1.draw();
-            player2.draw();
-
-            // Handle Mobile Controls for Player1
-            if (keysPressed['MobileLeft']) {
-                player1.velocityX = -player1.speed;
-            } else if (keysPressed['MobileRight']) {
-                player1.velocityX = player1.speed;
-            } else {
-                player1.velocityX = 0;
+            // Update Player Car based on input
+            if (keysPressed['ArrowLeft'] || keysPressed['KeyA'] || keysPressed['MobileLeft']) {
+                playerCar.angle -= TURN_SPEED;
+            }
+            if (keysPressed['ArrowRight'] || keysPressed['KeyD'] || keysPressed['MobileRight']) {
+                playerCar.angle += TURN_SPEED;
+            }
+            if (keysPressed['ArrowUp'] || keysPressed['KeyW'] || keysPressed['MobileAccelerate']) {
+                speed += ACCELERATION;
+                if (speed > MAX_SPEED) speed = MAX_SPEED;
+            }
+            if (keysPressed['ArrowDown'] || keysPressed['KeyS'] || keysPressed['MobileBrake']) {
+                speed -= BRAKE_DECELERATION;
+                if (speed < 0) speed = 0;
             }
 
-            if (keysPressed['MobileJump'] && player1.onGround) {
-                player1.velocityY = -player1.jumpStrength;
-                player1.onGround = false;
+            // Update player speed
+            playerCar.speed = speed;
+            // Update distance
+            distance += speed * deltaTime / 3600000 * 1000; // Convert km/h to m/s
+
+            // Update speed display
+            speedDisplay.textContent = `Speed: ${Math.round(speed)} km/h`;
+            distanceDisplay.textContent = `Distance: ${Math.round(distance)} m`;
+
+            // Calculate velocity based on angle and speed
+            const rad = playerCar.angle * Math.PI / 180;
+            playerCar.vx = Math.cos(rad) * playerCar.speed / 60; // Adjust scaling
+            playerCar.vy = Math.sin(rad) * playerCar.speed / 60;
+
+            // Update and Draw Player Car
+            playerCar.update();
+            playerCar.draw();
+
+            // Spawn Obstacles
+            if (timestamp % 1000 < 50) { // Every ~1 second
+                const obstacleWidth = 50;
+                const obstacleHeight = 100;
+                const obstacleX = Math.random() * (canvas.width - obstacleWidth);
+                const obstacleY = -obstacleHeight;
+                const obstacleSpeed = speed / 60 + Math.random() * 3; // Based on player's speed
+                const obstacleColor = '#FF0000';
+                obstacles.push(new Obstacle(obstacleX, obstacleY, obstacleWidth, obstacleHeight, obstacleColor, obstacleSpeed));
             }
 
-            // Handle Player2 Controls (Computer Controlled or Second Player)
-            // For simplicity, let's make Player2 controlled by keyboard (WASD)
-            // Alternatively, implement AI for Player2
+            // Update and Draw Obstacles
+            obstacles.forEach((obstacle, index) => {
+                obstacle.update();
+                obstacle.draw();
 
-            // Handle Attacks and Projectiles
-            // Player1's attack
-            if (player1.isAttacking) {
-                // Create a projectile based on attack direction
-                let direction = player1.controls.side;
-                projectiles.push(new Projectile(
-                    direction === 'left' ? player1.x : player1.x + player1.width,
-                    player1.y + player1.height / 2,
-                    direction,
-                    '#FFFF00'
-                ));
-                player1.isAttacking = false; // Reset attack
-            }
-
-            // Player2's attack (for two-player mode)
-            if (player2.isAttacking) {
-                let direction = player2.controls.side;
-                projectiles.push(new Projectile(
-                    direction === 'left' ? player2.x : player2.x + player2.width,
-                    player2.y + player2.height / 2,
-                    direction,
-                    '#FF00FF'
-                ));
-                player2.isAttacking = false;
-            }
-
-            // Update and Draw Projectiles
-            projectiles.forEach((proj, index) => {
-                proj.update();
-                proj.draw();
-
-                // Remove projectile if it goes out of bounds
-                if (proj.x < 0 || proj.x > canvas.width) {
-                    projectiles.splice(index, 1);
+                // Collision Detection
+                if (isColliding(playerCar, obstacle)) {
+                    endGame();
                 }
 
-                // Check collision with players
-                if (proj.color === '#FFFF00') { // Player1's projectile hitting Player2
-                    if (isColliding(proj, player2)) {
-                        player2.health -= 10;
-                        projectiles.splice(index, 1);
-                        updateHealth();
-                        if (player2.health <= 0) {
-                            gameOver('Player 1');
-                        }
-                    }
-                } else if (proj.color === '#FF00FF') { // Player2's projectile hitting Player1
-                    if (isColliding(proj, player1)) {
-                        player1.health -= 10;
-                        projectiles.splice(index, 1);
-                        updateHealth();
-                        if (player1.health <= 0) {
-                            gameOver('Player 2');
-                        }
-                    }
+                // Remove obstacles that have moved out of the canvas
+                if (obstacle.y > canvas.height + obstacle.height) {
+                    obstacles.splice(index, 1);
                 }
             });
-
-            // Example for Player2 Attack (Keyboard 'KeyS')
-            if (keysPressed[player2.controls.attack]) {
-                player2.attack();
-            }
-
-            // Example AI for Player2 (Optional)
-            // Implement AI behavior here if Player2 is computer-controlled
 
             // Continue the loop
             if (isGameRunning) {
@@ -466,26 +355,48 @@
             }
         }
 
+        // Collision Detection Function
+        function isColliding(car, obstacle) {
+            return car.x - car.width / 2 < obstacle.x + obstacle.width &&
+                   car.x + car.width / 2 > obstacle.x &&
+                   car.y - car.height / 2 < obstacle.y + obstacle.height &&
+                   car.y + car.height / 2 > obstacle.y;
+        }
+
         // Start Game Function
         function startGame() {
             isGameRunning = true;
             startButton.style.display = 'none';
-            // Reset Players
-            player1.x = 100;
-            player1.y = FLOOR - player1.height;
-            player1.velocityX = 0;
-            player1.velocityY = 0;
-            player1.health = 100;
-
-            player2.x = canvas.width - 150;
-            player2.y = FLOOR - player2.height;
-            player2.velocityX = 0;
-            player2.velocityY = 0;
-            player2.health = 100;
-
-            projectiles = [];
-            updateHealth();
+            resetGame();
             animationId = requestAnimationFrame(gameLoop);
+        }
+
+        // End Game Function
+        function endGame() {
+            isGameRunning = false;
+            cancelAnimationFrame(animationId);
+            alert(`Game Over!\nDistance: ${Math.round(distance)} m`);
+            startButton.style.display = 'block';
+        }
+
+        // Reset Game Function
+        function resetGame() {
+            // Reset Variables
+            speed = 0;
+            distance = 0;
+            lastTime = 0;
+            obstacles = [];
+
+            // Reset Player Car Position and Angle
+            playerCar.x = canvas.width / 2;
+            playerCar.y = canvas.height - 70;
+            playerCar.angle = 0;
+            playerCar.vx = 0;
+            playerCar.vy = 0;
+
+            // Update UI Displays
+            speedDisplay.textContent = `Speed: ${speed} km/h`;
+            distanceDisplay.textContent = `Distance: ${distance} m`;
         }
 
         // Restart Game Function
@@ -493,7 +404,7 @@
             if (!isGameRunning) {
                 startGame();
             } else {
-                // Optionally implement pause or other features
+                resetGame();
             }
         }
 
@@ -507,7 +418,7 @@
 
         // Responsive Canvas
         function resizeCanvas() {
-            const aspectRatio = 2; // Width : Height = 2:1
+            const aspectRatio = 2; // Width / Height
             let width = window.innerWidth;
             let height = window.innerHeight;
 
@@ -523,45 +434,6 @@
 
         window.addEventListener('resize', resizeCanvas);
         resizeCanvas();
-
-        // Handle Mobile Controls
-        leftButton.addEventListener('touchstart', function(e) {
-            e.preventDefault();
-            keysPressed['MobileLeft'] = true;
-        });
-
-        leftButton.addEventListener('touchend', function(e) {
-            e.preventDefault();
-            keysPressed['MobileLeft'] = false;
-        });
-
-        rightButton.addEventListener('touchstart', function(e) {
-            e.preventDefault();
-            keysPressed['MobileRight'] = true;
-        });
-
-        rightButton.addEventListener('touchend', function(e) {
-            e.preventDefault();
-            keysPressed['MobileRight'] = false;
-        });
-
-        jumpButton.addEventListener('touchstart', function(e) {
-            e.preventDefault();
-            keysPressed['MobileJump'] = true;
-            player1.velocityY = -player1.jumpStrength;
-            player1.onGround = false;
-        });
-
-        jumpButton.addEventListener('touchend', function(e) {
-            e.preventDefault();
-            keysPressed['MobileJump'] = false;
-        });
-
-        attackButton.addEventListener('touchstart', function(e) {
-            e.preventDefault();
-            player1.attack();
-        });
-
     </script>
 </body>
 </html>
