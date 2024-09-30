@@ -1,153 +1,202 @@
 <!DOCTYPE html>
-<html lang="ja">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>プラットフォーマーゲーム</title>
+    <title>HunterxHunter's 軍儀 (Simplified)</title>
     <style>
         body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
             margin: 0;
-            overflow: hidden;
-            font-family: sans-serif;
-            background-color: #87ceeb;
+            background-color: #f0f0f0;
         }
-        canvas {
-            display: block;
-            background-color: #4ecf4c;
+        #gameBoard {
+            display: grid;
+            grid-template-columns: repeat(6, 60px);
+            grid-template-rows: repeat(6, 60px);
+            gap: 2px;
+            background-color: #333;
+        }
+        .cell {
+            width: 60px;
+            height: 60px;
+            background-color: #fff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 24px;
+            cursor: pointer;
+        }
+        .player1 {
+            background-color: #ff6347;
+            color: #fff;
+        }
+        .player2 {
+            background-color: #4682b4;
+            color: #fff;
+        }
+        #status {
+            margin-top: 20px;
+            text-align: center;
+        }
+        button {
+            margin-top: 10px;
         }
     </style>
 </head>
 <body>
-<canvas id="gameCanvas"></canvas>
+
+<div>
+    <div id="gameBoard"></div>
+    <div id="status">
+        <p id="turnIndicator">Player 1's Turn</p>
+        <button onclick="resetGame()">Restart Game</button>
+    </div>
+</div>
 
 <script>
-    // Canvas設定
-    const canvas = document.getElementById("gameCanvas");
-    const ctx = canvas.getContext("2d");
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
+    // Game setup
+    const boardSize = 6;
+    const gameBoard = document.getElementById('gameBoard');
+    const turnIndicator = document.getElementById('turnIndicator');
+    let currentPlayer = 1;
+    let selectedPiece = null;
+    let board = [];
 
-    // プレイヤーオブジェクト
-    const player = {
-        x: 50,
-        y: canvas.height - 150,
-        width: 50,
-        height: 50,
-        speed: 5,
-        dy: 0,
-        gravity: 0.8,
-        jumpPower: -15,
-        isOnGround: false
-    };
+    // Initialize the board with pieces for both players
+    function initBoard() {
+        board = Array(boardSize).fill(null).map(() => Array(boardSize).fill(null));
+        
+        // Set Player 1's pieces (King and two soldiers)
+        board[0][0] = { player: 1, type: 'K' }; // King
+        board[0][1] = { player: 1, type: 'S' }; // Soldier
+        board[0][2] = { player: 1, type: 'S' }; // Soldier
 
-    // プラットフォームオブジェクト
-    const platforms = [
-        {x: 0, y: canvas.height - 100, width: canvas.width, height: 20},
-        {x: 300, y: canvas.height - 200, width: 200, height: 20},
-        {x: 600, y: canvas.height - 300, width: 200, height: 20},
-        {x: 900, y: canvas.height - 400, width: 200, height: 20}
-    ];
-
-    // ゴールオブジェクト
-    const goal = {
-        x: 950,
-        y: canvas.height - 450,
-        width: 50,
-        height: 50
-    };
-
-    let keys = {};
-
-    // キー入力を監視
-    document.addEventListener("keydown", (e) => {
-        keys[e.key] = true;
-    });
-    document.addEventListener("keyup", (e) => {
-        keys[e.key] = false;
-    });
-
-    // プレイヤーを描画
-    function drawPlayer() {
-        ctx.fillStyle = "#ff6347";
-        ctx.fillRect(player.x, player.y, player.width, player.height);
+        // Set Player 2's pieces (King and two soldiers)
+        board[5][5] = { player: 2, type: 'K' }; // King
+        board[5][4] = { player: 2, type: 'S' }; // Soldier
+        board[5][3] = { player: 2, type: 'S' }; // Soldier
     }
 
-    // プラットフォームを描画
-    function drawPlatforms() {
-        ctx.fillStyle = "#8b4513";
-        platforms.forEach(platform => {
-            ctx.fillRect(platform.x, platform.y, platform.width, platform.height);
-        });
+    // Create the board UI
+    function createBoard() {
+        gameBoard.innerHTML = '';
+        for (let row = 0; row < boardSize; row++) {
+            for (let col = 0; col < boardSize; col++) {
+                const cell = document.createElement('div');
+                cell.classList.add('cell');
+                cell.dataset.row = row;
+                cell.dataset.col = col;
+                if (board[row][col]) {
+                    const piece = board[row][col];
+                    cell.textContent = piece.type;
+                    cell.classList.add(`player${piece.player}`);
+                }
+                cell.addEventListener('click', () => handleCellClick(row, col));
+                gameBoard.appendChild(cell);
+            }
+        }
     }
 
-    // ゴールを描画
-    function drawGoal() {
-        ctx.fillStyle = "gold";
-        ctx.fillRect(goal.x, goal.y, goal.width, goal.height);
+    // Handle clicks on cells
+    function handleCellClick(row, col) {
+        const selectedCell = board[row][col];
+
+        // If selecting own piece
+        if (selectedCell && selectedCell.player === currentPlayer) {
+            selectedPiece = { row, col };
+            highlightValidMoves(row, col);
+        } 
+        // If moving to an empty cell or capturing opponent's piece
+        else if (selectedPiece) {
+            const validMove = isValidMove(selectedPiece.row, selectedPiece.col, row, col);
+            if (validMove) {
+                movePiece(selectedPiece.row, selectedPiece.col, row, col);
+                checkForWinner();
+                switchTurn();
+                selectedPiece = null;
+            }
+        }
     }
 
-    // プレイヤーの動きを更新
-    function updatePlayer() {
-        // 左右の移動
-        if (keys["ArrowRight"]) {
-            player.x += player.speed;
-        }
-        if (keys["ArrowLeft"]) {
-            player.x -= player.speed;
-        }
+    // Highlight valid moves for the selected piece
+    function highlightValidMoves(row, col) {
+        // Clear previous highlights
+        const cells = document.querySelectorAll('.cell');
+        cells.forEach(cell => cell.style.border = '');
 
-        // ジャンプ
-        if (keys[" "] && player.isOnGround) {
-            player.dy = player.jumpPower;
-            player.isOnGround = false;
-        }
-
-        // 重力の適用
-        player.dy += player.gravity;
-        player.y += player.dy;
-
-        // 地面との当たり判定
-        player.isOnGround = false;
-        platforms.forEach(platform => {
-            if (player.y + player.height < platform.y &&
-                player.y + player.height + player.dy > platform.y &&
-                player.x + player.width > platform.x &&
-                player.x < platform.x + platform.width) {
-                player.dy = 0;
-                player.y = platform.y - player.height;
-                player.isOnGround = true;
+        // Highlight adjacent cells
+        const moves = getValidMoves(row, col);
+        moves.forEach(([r, c]) => {
+            const cell = document.querySelector(`[data-row='${r}'][data-col='${c}']`);
+            if (cell) {
+                cell.style.border = '2px solid yellow';
             }
         });
+    }
 
-        // ゴールとの当たり判定
-        if (player.x + player.width > goal.x &&
-            player.x < goal.x + goal.width &&
-            player.y + player.height > goal.y &&
-            player.y < goal.y + goal.height) {
-            alert("ゴールしました！");
+    // Get valid moves for a piece
+    function getValidMoves(row, col) {
+        const moves = [];
+        const directions = [[-1, 0], [1, 0], [0, -1], [0, 1]]; // Up, Down, Left, Right
+        directions.forEach(([dr, dc]) => {
+            const newRow = row + dr;
+            const newCol = col + dc;
+            if (newRow >= 0 && newRow < boardSize && newCol >= 0 && newCol < boardSize) {
+                if (!board[newRow][newCol] || board[newRow][newCol].player !== currentPlayer) {
+                    moves.push([newRow, newCol]);
+                }
+            }
+        });
+        return moves;
+    }
+
+    // Check if a move is valid
+    function isValidMove(fromRow, fromCol, toRow, toCol) {
+        const validMoves = getValidMoves(fromRow, fromCol);
+        return validMoves.some(([r, c]) => r === toRow && c === toCol);
+    }
+
+    // Move the piece on the board
+    function movePiece(fromRow, fromCol, toRow, toCol) {
+        const piece = board[fromRow][fromCol];
+        board[fromRow][fromCol] = null;
+        board[toRow][toCol] = piece;
+        createBoard();
+    }
+
+    // Switch turns between players
+    function switchTurn() {
+        currentPlayer = currentPlayer === 1 ? 2 : 1;
+        turnIndicator.textContent = `Player ${currentPlayer}'s Turn`;
+    }
+
+    // Check if there's a winner
+    function checkForWinner() {
+        const kings = board.flat().filter(piece => piece && piece.type === 'K');
+        if (kings.length < 2) {
+            alert(`Player ${currentPlayer} wins!`);
             resetGame();
         }
     }
 
-    // ゲームをリセット
+    // Reset the game
     function resetGame() {
-        player.x = 50;
-        player.y = canvas.height - 150;
-        player.dy = 0;
+        currentPlayer = 1;
+        initBoard();
+        createBoard();
+        turnIndicator.textContent = "Player 1's Turn";
     }
 
-    // ゲームのループ
-    function gameLoop() {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        drawPlatforms();
-        drawPlayer();
-        drawGoal();
-        updatePlayer();
-        requestAnimationFrame(gameLoop);
-    }
+    // Start the game
+    initBoard();
+    createBoard();
 
-    // ゲームを開始
-    gameLoop();
 </script>
+
 </body>
 </html>
