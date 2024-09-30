@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Space Shooter</title>
+    <title>Browser Fighting Game</title>
     <style>
         body {
             margin: 0;
@@ -21,12 +21,12 @@
             width: 100%;
             max-width: 800px;
             height: 100vh;
-            max-height: 600px;
+            max-height: 400px;
         }
         #gameCanvas {
             width: 100%;
             height: 100%;
-            background-color: #000;
+            background-color: #333;
         }
         #startScreen, #gameOverScreen {
             position: absolute;
@@ -53,12 +53,18 @@
         button:hover {
             background-color: #45a049;
         }
-        #score {
+        #healthBars {
             position: absolute;
             top: 10px;
             left: 10px;
-            color: #fff;
-            font-size: 24px;
+            right: 10px;
+            display: flex;
+            justify-content: space-between;
+        }
+        .healthBar {
+            width: 45%;
+            height: 20px;
+            background-color: #f00;
         }
         #mobileControls {
             position: absolute;
@@ -84,21 +90,38 @@
 <body>
     <div id="gameContainer">
         <canvas id="gameCanvas"></canvas>
-        <div id="score">Score: 0</div>
+        <div id="healthBars">
+            <div id="player1Health" class="healthBar"></div>
+            <div id="player2Health" class="healthBar"></div>
+        </div>
         <div id="startScreen">
-            <h1>Space Shooter</h1>
-            <p>Use arrow keys to move, spacebar to shoot</p>
+            <h1>Browser Fighting Game</h1>
+            <p>Player 1: A (left), D (right), W (jump), S (attack)</p>
+            <p>Player 2: ← (left), → (right), ↑ (jump), ↓ (attack)</p>
             <button id="startButton">Start Game</button>
         </div>
         <div id="gameOverScreen" style="display: none;">
             <h1>Game Over</h1>
-            <p id="finalScore"></p>
+            <p id="winner"></p>
             <button id="restartButton">Play Again</button>
         </div>
         <div id="mobileControls">
-            <div id="leftBtn" class="mobileBtn">←</div>
-            <div id="rightBtn" class="mobileBtn">→</div>
-            <div id="fireBtn" class="mobileBtn">🔥</div>
+            <div>
+                <div id="leftBtn1" class="mobileBtn">←</div>
+                <div id="rightBtn1" class="mobileBtn">→</div>
+            </div>
+            <div>
+                <div id="jumpBtn1" class="mobileBtn">↑</div>
+                <div id="attackBtn1" class="mobileBtn">A</div>
+            </div>
+            <div>
+                <div id="leftBtn2" class="mobileBtn">←</div>
+                <div id="rightBtn2" class="mobileBtn">→</div>
+            </div>
+            <div>
+                <div id="jumpBtn2" class="mobileBtn">↑</div>
+                <div id="attackBtn2" class="mobileBtn">A</div>
+            </div>
         </div>
     </div>
 
@@ -110,82 +133,82 @@
         const gameOverScreen = document.getElementById('gameOverScreen');
         const startButton = document.getElementById('startButton');
         const restartButton = document.getElementById('restartButton');
-        const scoreElement = document.getElementById('score');
-        const finalScoreElement = document.getElementById('finalScore');
+        const winnerElement = document.getElementById('winner');
+        const player1HealthBar = document.getElementById('player1Health');
+        const player2HealthBar = document.getElementById('player2Health');
         const mobileControls = document.getElementById('mobileControls');
 
         // Game variables
         let gameLoop;
-        let player, bullets, asteroids;
-        let score = 0;
+        let player1, player2;
         let gameActive = false;
 
         // Player class
         class Player {
-            constructor(x, y, size) {
+            constructor(x, y, color, controls) {
                 this.x = x;
                 this.y = y;
-                this.size = size;
+                this.width = 50;
+                this.height = 100;
+                this.color = color;
                 this.speed = 5;
+                this.jumpForce = 15;
+                this.yVelocity = 0;
+                this.health = 100;
+                this.isJumping = false;
+                this.isAttacking = false;
+                this.attackCooldown = 0;
+                this.controls = controls;
             }
 
             draw() {
-                ctx.fillStyle = '#00f';
-                ctx.beginPath();
-                ctx.moveTo(this.x, this.y - this.size);
-                ctx.lineTo(this.x - this.size, this.y + this.size);
-                ctx.lineTo(this.x + this.size, this.y + this.size);
-                ctx.closePath();
-                ctx.fill();
+                ctx.fillStyle = this.color;
+                ctx.fillRect(this.x, this.y, this.width, this.height);
             }
 
             move(direction) {
-                if (direction === 'left' && this.x > this.size) {
+                if (direction === 'left') {
                     this.x -= this.speed;
-                } else if (direction === 'right' && this.x < canvas.width - this.size) {
+                } else if (direction === 'right') {
                     this.x += this.speed;
                 }
-            }
-        }
-
-        // Bullet class
-        class Bullet {
-            constructor(x, y) {
-                this.x = x;
-                this.y = y;
-                this.speed = 7;
-                this.size = 5;
+                // Keep player within canvas bounds
+                this.x = Math.max(0, Math.min(canvas.width - this.width, this.x));
             }
 
-            draw() {
-                ctx.fillStyle = '#f00';
-                ctx.fillRect(this.x - this.size / 2, this.y - this.size / 2, this.size, this.size);
+            jump() {
+                if (!this.isJumping) {
+                    this.yVelocity = -this.jumpForce;
+                    this.isJumping = true;
+                }
             }
 
-            update() {
-                this.y -= this.speed;
-            }
-        }
-
-        // Asteroid class
-        class Asteroid {
-            constructor(x, y, size) {
-                this.x = x;
-                this.y = y;
-                this.size = size;
-                this.speed = Math.random() * 2 + 1;
-            }
-
-            draw() {
-                ctx.fillStyle = '#888';
-                ctx.beginPath();
-                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
-                ctx.closePath();
-                ctx.fill();
+            attack() {
+                if (this.attackCooldown === 0) {
+                    this.isAttacking = true;
+                    this.attackCooldown = 20; // Set cooldown frames
+                }
             }
 
             update() {
-                this.y += this.speed;
+                // Apply gravity
+                this.yVelocity += 0.8;
+                this.y += this.yVelocity;
+
+                // Floor collision
+                if (this.y + this.height > canvas.height) {
+                    this.y = canvas.height - this.height;
+                    this.yVelocity = 0;
+                    this.isJumping = false;
+                }
+
+                // Update attack state
+                if (this.isAttacking) {
+                    this.isAttacking = false;
+                }
+                if (this.attackCooldown > 0) {
+                    this.attackCooldown--;
+                }
             }
         }
 
@@ -194,75 +217,74 @@
             canvas.width = canvas.offsetWidth;
             canvas.height = canvas.offsetHeight;
 
-            player = new Player(canvas.width / 2, canvas.height - 30, 20);
-            bullets = [];
-            asteroids = [];
-            score = 0;
-            updateScore();
+            player1 = new Player(50, canvas.height - 100, '#00f', {
+                left: 'KeyA',
+                right: 'KeyD',
+                jump: 'KeyW',
+                attack: 'KeyS'
+            });
+            player2 = new Player(canvas.width - 100, canvas.height - 100, '#f00', {
+                left: 'ArrowLeft',
+                right: 'ArrowRight',
+                jump: 'ArrowUp',
+                attack: 'ArrowDown'
+            });
         }
 
         // Draw game objects
         function draw() {
-            ctx.fillStyle = '#000';
+            ctx.fillStyle = '#333';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            player.draw();
-            bullets.forEach(bullet => bullet.draw());
-            asteroids.forEach(asteroid => asteroid.draw());
+            player1.draw();
+            player2.draw();
+
+            // Draw attack indicators
+            if (player1.isAttacking) {
+                ctx.fillStyle = 'yellow';
+                ctx.fillRect(player1.x + player1.width, player1.y, 20, player1.height);
+            }
+            if (player2.isAttacking) {
+                ctx.fillStyle = 'yellow';
+                ctx.fillRect(player2.x - 20, player2.y, 20, player2.height);
+            }
         }
 
         // Update game state
         function update() {
-            bullets.forEach((bullet, index) => {
-                bullet.update();
-                if (bullet.y < 0) {
-                    bullets.splice(index, 1);
-                }
-            });
+            player1.update();
+            player2.update();
 
-            asteroids.forEach((asteroid, asteroidIndex) => {
-                asteroid.update();
+            // Check for attacks
+            if (player1.isAttacking && isColliding(player1, player2)) {
+                player2.health -= 10;
+                updateHealthBars();
+            }
+            if (player2.isAttacking && isColliding(player2, player1)) {
+                player1.health -= 10;
+                updateHealthBars();
+            }
 
-                // Check collision with bullets
-                bullets.forEach((bullet, bulletIndex) => {
-                    if (checkCollision(bullet, asteroid)) {
-                        asteroids.splice(asteroidIndex, 1);
-                        bullets.splice(bulletIndex, 1);
-                        score += 10;
-                        updateScore();
-                    }
-                });
-
-                // Check collision with player
-                if (checkCollision(player, asteroid)) {
-                    endGame();
-                }
-
-                // Remove asteroids that are off screen
-                if (asteroid.y > canvas.height) {
-                    asteroids.splice(asteroidIndex, 1);
-                }
-            });
-
-            // Spawn new asteroids
-            if (Math.random() < 0.02) {
-                const x = Math.random() * canvas.width;
-                const size = Math.random() * 20 + 10;
-                asteroids.push(new Asteroid(x, -size, size));
+            // Check for game over
+            if (player1.health <= 0 || player2.health <= 0) {
+                endGame();
             }
         }
 
-        // Check collision between two objects
-        function checkCollision(obj1, obj2) {
-            const dx = obj1.x - obj2.x;
-            const dy = obj1.y - obj2.y;
-            const distance = Math.sqrt(dx * dx + dy * dy);
-            return distance < obj1.size + obj2.size;
+        // Check collision between two players
+        function isColliding(attacker, defender) {
+            return (
+                attacker.x < defender.x + defender.width &&
+                attacker.x + attacker.width > defender.x &&
+                attacker.y < defender.y + defender.height &&
+                attacker.y + attacker.height > defender.y
+            );
         }
 
-        // Update score display
-        function updateScore() {
-            scoreElement.textContent = `Score: ${score}`;
+        // Update health bars
+        function updateHealthBars() {
+            player1HealthBar.style.width = `${player1.health}%`;
+            player2HealthBar.style.width = `${player2.health}%`;
         }
 
         // Game loop
@@ -277,6 +299,7 @@
             startScreen.style.display = 'none';
             setupGame();
             gameActive = true;
+            updateHealthBars();
             gameLoop = requestAnimationFrame(gameStep);
         }
 
@@ -285,7 +308,7 @@
             cancelAnimationFrame(gameLoop);
             gameActive = false;
             gameOverScreen.style.display = 'flex';
-            finalScoreElement.textContent = `Final Score: ${score}`;
+            winnerElement.textContent = player1.health <= 0 ? "Player 2 Wins!" : "Player 1 Wins!";
         }
 
         // Restart the game
@@ -302,37 +325,40 @@
         document.addEventListener('keydown', (e) => {
             if (!gameActive) return;
 
-            switch (e.code) {
-                case 'ArrowLeft':
-                    player.move('left');
-                    break;
-                case 'ArrowRight':
-                    player.move('right');
-                    break;
-                case 'Space':
-                    bullets.push(new Bullet(player.x, player.y - player.size));
-                    break;
-            }
+            if (e.code === player1.controls.left) player1.move('left');
+            if (e.code === player1.controls.right) player1.move('right');
+            if (e.code === player1.controls.jump) player1.jump();
+            if (e.code === player1.controls.attack) player1.attack();
+
+            if (e.code === player2.controls.left) player2.move('left');
+            if (e.code === player2.controls.right) player2.move('right');
+            if (e.code === player2.controls.jump) player2.jump();
+            if (e.code === player2.controls.attack) player2.attack();
         });
 
         // Mobile controls
         function setupMobileControls() {
             mobileControls.style.display = 'flex';
             
-            const leftBtn = document.getElementById('leftBtn');
-            const rightBtn = document.getElementById('rightBtn');
-            const fireBtn = document.getElementById('fireBtn');
+            const controls = [
+                { id: 'leftBtn1', action: () => player1.move('left') },
+                { id: 'rightBtn1', action: () => player1.move('right') },
+                { id: 'jumpBtn1', action: () => player1.jump() },
+                { id: 'attackBtn1', action: () => player1.attack() },
+                { id: 'leftBtn2', action: () => player2.move('left') },
+                { id: 'rightBtn2', action: () => player2.move('right') },
+                { id: 'jumpBtn2', action: () => player2.jump() },
+                { id: 'attackBtn2', action: () => player2.attack() }
+            ];
 
-            leftBtn.addEventListener('touchstart', () => {
-                if (gameActive) player.move('left');
-            });
-
-            rightBtn.addEventListener('touchstart', () => {
-                if (gameActive) player.move('right');
-            });
-
-            fireBtn.addEventListener('touchstart', () => {
-                if (gameActive) bullets.push(new Bullet(player.x, player.y - player.size));
+            controls.forEach(control => {
+                const button = document.getElementById(control.id);
+                ['touchstart', 'mousedown'].forEach(eventType => {
+                    button.addEventListener(eventType, (e) => {
+                        e.preventDefault();
+                        if (gameActive) control.action();
+                    });
+                });
             });
         }
 
