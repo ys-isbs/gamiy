@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Shooting Game</title>
+    <title>Browser Fighting Game</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
         /* Reset default styles */
@@ -14,7 +14,7 @@
 
         /* Body styling */
         body {
-            background-color: #111;
+            background-color: #222;
             display: flex;
             justify-content: center;
             align-items: center;
@@ -26,20 +26,21 @@
 
         /* Game Canvas */
         canvas {
-            background-color: #222;
+            background-color: #333;
             border: 2px solid #fff;
             border-radius: 10px;
             display: block;
         }
 
-        /* Score Display */
-        #scoreBoard {
+        /* UI Elements */
+        #ui {
             position: absolute;
             top: 20px;
             width: 100%;
-            text-align: center;
+            display: flex;
+            justify-content: space-around;
             color: #fff;
-            font-size: 24px;
+            font-size: 20px;
             z-index: 1;
         }
 
@@ -72,17 +73,19 @@
             background-color: rgba(255, 255, 255, 0.7);
             border: none;
             border-radius: 50%;
-            font-size: 30px;
+            font-size: 24px;
             cursor: pointer;
             display: none; /* Hidden on desktop */
             align-items: center;
             justify-content: center;
+            text-align: center;
+            line-height: 60px;
         }
 
         /* Show controls on touch devices */
         @media (pointer: coarse) {
             .control-button {
-                display: flex;
+                display: block;
             }
         }
 
@@ -95,88 +98,153 @@
             left: 100px;
         }
 
-        #shootButton {
+        #jumpButton {
+            right: 100px;
+        }
+
+        #attackButton {
             right: 20px;
         }
     </style>
 </head>
 <body>
-    <!-- Score Display -->
-    <div id="scoreBoard">Score: 0</div>
+    <!-- UI Elements -->
+    <div id="ui">
+        <div id="player1Health">Player 1: 100</div>
+        <div id="player2Health">Player 2: 100</div>
+    </div>
 
     <!-- Start/Restart Button -->
     <button id="startButton">Start Game</button>
 
     <!-- Game Canvas -->
-    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <canvas id="gameCanvas" width="800" height="400"></canvas>
 
     <!-- Mobile Control Buttons -->
-    <button id="leftButton" class="control-button">⬅️</button>
-    <button id="rightButton" class="control-button">➡️</button>
-    <button id="shootButton" class="control-button">🔫</button>
+    <button id="leftButton" class="control-button">◀️</button>
+    <button id="rightButton" class="control-button">▶️</button>
+    <button id="jumpButton" class="control-button">⬆️</button>
+    <button id="attackButton" class="control-button">👊</button>
 
     <script>
         // Get DOM Elements
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
-        const scoreBoard = document.getElementById('scoreBoard');
         const startButton = document.getElementById('startButton');
+        const player1HealthDisplay = document.getElementById('player1Health');
+        const player2HealthDisplay = document.getElementById('player2Health');
         const leftButton = document.getElementById('leftButton');
         const rightButton = document.getElementById('rightButton');
-        const shootButton = document.getElementById('shootButton');
+        const jumpButton = document.getElementById('jumpButton');
+        const attackButton = document.getElementById('attackButton');
 
         // Game Variables
         let animationId;
         let isGameRunning = false;
         let score = 0;
 
+        // Constants
+        const GRAVITY = 0.5;
+        const FLOOR = canvas.height - 50;
+
         // Player Class
         class Player {
-            constructor() {
+            constructor(x, y, color, controls) {
                 this.width = 50;
                 this.height = 50;
-                this.x = canvas.width / 2 - this.width / 2;
-                this.y = canvas.height - this.height - 10;
-                this.speed = 7;
-                this.color = '#00FF00';
+                this.x = x;
+                this.y = y;
+                this.color = color;
                 this.velocityX = 0;
-                this.canShoot = true;
-                this.shootCooldown = 500; // milliseconds
+                this.velocityY = 0;
+                this.speed = 5;
+                this.jumpStrength = 15;
+                this.onGround = false;
+                this.health = 100;
+                this.controls = controls; // Object with key bindings
+                this.isAttacking = false;
+                this.attackCooldown = 500; // milliseconds
+                this.canAttack = true;
             }
 
             draw() {
                 ctx.fillStyle = this.color;
                 ctx.fillRect(this.x, this.y, this.width, this.height);
+                
+                // Draw attack box
+                if (this.isAttacking) {
+                    ctx.fillStyle = 'rgba(255, 255, 0, 0.5)';
+                    let attackWidth = 20;
+                    let attackHeight = this.height;
+                    if (this.controls.side === 'left') {
+                        ctx.fillRect(this.x - attackWidth, this.y, attackWidth, attackHeight);
+                    } else {
+                        ctx.fillRect(this.x + this.width, this.y, attackWidth, attackHeight);
+                    }
+                }
             }
 
-            update() {
+            update(keysPressed) {
+                // Horizontal Movement
+                if (keysPressed[this.controls.left]) {
+                    this.velocityX = -this.speed;
+                } else if (keysPressed[this.controls.right]) {
+                    this.velocityX = this.speed;
+                } else {
+                    this.velocityX = 0;
+                }
+
+                // Jumping
+                if ((keysPressed[this.controls.jump]) && this.onGround) {
+                    this.velocityY = -this.jumpStrength;
+                    this.onGround = false;
+                }
+
+                // Apply gravity
+                this.velocityY += GRAVITY;
+                this.y += this.velocityY;
                 this.x += this.velocityX;
 
-                // Prevent player from moving out of bounds
-                if (this.x < 0) this.x = 0;
-                if (this.x + this.width > canvas.width) this.x = canvas.width - this.width;
+                // Floor Collision
+                if (this.y + this.height >= FLOOR) {
+                    this.y = FLOOR - this.height;
+                    this.velocityY = 0;
+                    this.onGround = true;
+                }
+
+                // Wall Collision
+                if (this.x < 0) {
+                    this.x = 0;
+                }
+                if (this.x + this.width > canvas.width) {
+                    this.x = canvas.width - this.width;
+                }
             }
 
-            shoot() {
-                if (this.canShoot) {
-                    bullets.push(new Bullet(this.x + this.width / 2, this.y));
-                    this.canShoot = false;
+            attack() {
+                if (this.canAttack) {
+                    this.isAttacking = true;
+                    this.canAttack = false;
                     setTimeout(() => {
-                        this.canShoot = true;
-                    }, this.shootCooldown);
+                        this.isAttacking = false;
+                    }, 200); // Attack duration
+                    setTimeout(() => {
+                        this.canAttack = true;
+                    }, this.attackCooldown); // Cooldown
                 }
             }
         }
 
-        // Enemy Class
-        class Enemy {
-            constructor(x, y, speed) {
-                this.width = 40;
-                this.height = 40;
+        // Projectile Class (for attacks)
+        class Projectile {
+            constructor(x, y, direction, color) {
+                this.width = 10;
+                this.height = 5;
                 this.x = x;
                 this.y = y;
-                this.speed = speed;
-                this.color = '#FF0000';
+                this.speed = 7;
+                this.direction = direction; // 'left' or 'right'
+                this.color = color;
             }
 
             draw() {
@@ -185,158 +253,101 @@
             }
 
             update() {
-                this.y += this.speed;
+                if (this.direction === 'left') {
+                    this.x -= this.speed;
+                } else {
+                    this.x += this.speed;
+                }
             }
         }
 
-        // Bullet Class
-        class Bullet {
-            constructor(x, y) {
-                this.width = 5;
-                this.height = 10;
-                this.x = x - this.width / 2;
-                this.y = y;
-                this.speed = 10;
-                this.color = '#FFFF00';
-            }
+        // Initialize Players
+        const player1 = new Player(100, FLOOR - 50, '#00FF00', {
+            left: 'ArrowLeft',
+            right: 'ArrowRight',
+            jump: 'ArrowUp',
+            attack: 'ArrowDown',
+            side: 'left'
+        });
 
-            draw() {
-                ctx.fillStyle = this.color;
-                ctx.fillRect(this.x, this.y, this.width, this.height);
-            }
+        const player2 = new Player(canvas.width - 150, FLOOR - 50, '#FF0000', {
+            left: 'KeyA',
+            right: 'KeyD',
+            jump: 'KeyW',
+            attack: 'KeyS',
+            side: 'right'
+        });
 
-            update() {
-                this.y -= this.speed;
-            }
-        }
+        // Array to hold projectiles
+        let projectiles = [];
 
-        // Initialize Game Objects
-        const player = new Player();
-        let enemies = [];
-        let bullets = [];
-        let enemySpawnInterval;
-        let lastEnemySpawnTime = 0;
+        // Keys Pressed Object
+        const keysPressed = {};
 
-        // Handle Keyboard Input
-        const keys = {};
-
+        // Event Listeners for Keyboard Controls
         window.addEventListener('keydown', function(e) {
-            keys[e.code] = true;
-            // Prevent default scrolling for arrow keys and space
-            if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code)) {
+            keysPressed[e.code] = true;
+            // Prevent default behavior for space and arrow keys
+            if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'KeyW', 'KeyA', 'KeyS', 'KeyD'].includes(e.code)) {
                 e.preventDefault();
             }
         });
 
         window.addEventListener('keyup', function(e) {
-            keys[e.code] = false;
+            keysPressed[e.code] = false;
         });
 
-        // Handle Mobile Button Presses
+        // Event Listeners for Mobile Controls
         leftButton.addEventListener('touchstart', function(e) {
             e.preventDefault();
-            keys['MobileLeft'] = true;
+            keysPressed['MobileLeft'] = true;
         });
 
         leftButton.addEventListener('touchend', function(e) {
             e.preventDefault();
-            keys['MobileLeft'] = false;
+            keysPressed['MobileLeft'] = false;
         });
 
         rightButton.addEventListener('touchstart', function(e) {
             e.preventDefault();
-            keys['MobileRight'] = true;
+            keysPressed['MobileRight'] = true;
         });
 
         rightButton.addEventListener('touchend', function(e) {
             e.preventDefault();
-            keys['MobileRight'] = false;
+            keysPressed['MobileRight'] = false;
         });
 
-        shootButton.addEventListener('touchstart', function(e) {
+        jumpButton.addEventListener('touchstart', function(e) {
             e.preventDefault();
-            player.shoot();
+            keysPressed['MobileJump'] = true;
         });
 
-        // Handle Mouse Click for Shooting
-        canvas.addEventListener('click', function(e) {
-            player.shoot();
+        jumpButton.addEventListener('touchend', function(e) {
+            e.preventDefault();
+            keysPressed['MobileJump'] = false;
         });
 
-        // Handle Touch for Shooting
+        attackButton.addEventListener('touchstart', function(e) {
+            e.preventDefault();
+            player1.attack();
+        });
+
+        // Event Listener for Mouse Click on Canvas to Attack
+        canvas.addEventListener('mousedown', function(e) {
+            player1.attack();
+        });
+
+        // Event Listener for Touch on Canvas to Attack
         canvas.addEventListener('touchstart', function(e) {
             e.preventDefault();
-            player.shoot();
+            player1.attack();
         }, { passive: false });
 
-        // Game Loop
-        function gameLoop(timestamp) {
-            // Clear Canvas
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            // Update Player Velocity based on keys
-            if (keys['ArrowLeft'] || keys['KeyA'] || keys['MobileLeft']) {
-                player.velocityX = -player.speed;
-            } else if (keys['ArrowRight'] || keys['KeyD'] || keys['MobileRight']) {
-                player.velocityX = player.speed;
-            } else {
-                player.velocityX = 0;
-            }
-
-            // Update and Draw Player
-            player.update();
-            player.draw();
-
-            // Spawn Enemies at Intervals
-            if (!lastEnemySpawnTime || timestamp - lastEnemySpawnTime > 1000) { // Every 1 second
-                const enemyX = Math.random() * (canvas.width - 40);
-                const enemySpeed = 2 + Math.random() * 3; // Speed between 2 and 5
-                enemies.push(new Enemy(enemyX, -40, enemySpeed));
-                lastEnemySpawnTime = timestamp;
-            }
-
-            // Update and Draw Enemies
-            enemies.forEach((enemy, enemyIndex) => {
-                enemy.update();
-                enemy.draw();
-
-                // Check for collision with player
-                if (isColliding(player, enemy)) {
-                    endGame();
-                }
-
-                // Remove enemies that have moved out of the canvas
-                if (enemy.y > canvas.height) {
-                    enemies.splice(enemyIndex, 1);
-                }
-            });
-
-            // Update and Draw Bullets
-            bullets.forEach((bullet, bulletIndex) => {
-                bullet.update();
-                bullet.draw();
-
-                // Remove bullets that have moved out of the canvas
-                if (bullet.y < -bullet.height) {
-                    bullets.splice(bulletIndex, 1);
-                }
-
-                // Check for collision with enemies
-                enemies.forEach((enemy, enemyIndex) => {
-                    if (isColliding(bullet, enemy)) {
-                        // Remove enemy and bullet
-                        enemies.splice(enemyIndex, 1);
-                        bullets.splice(bulletIndex, 1);
-                        score += 10;
-                        updateScore();
-                    }
-                });
-            });
-
-            // Continue the loop
-            if (isGameRunning) {
-                animationId = requestAnimationFrame(gameLoop);
-            }
+        // Update Health Displays
+        function updateHealth() {
+            player1HealthDisplay.textContent = `Player 1: ${player1.health}`;
+            player2HealthDisplay.textContent = `Player 2: ${player2.health}`;
         }
 
         // Collision Detection Function
@@ -347,38 +358,134 @@
                    rect1.y + rect1.height > rect2.y;
         }
 
-        // Update Score Display
-        function updateScore() {
-            scoreBoard.textContent = `Score: ${score}`;
+        // Game Over Function
+        function gameOver(winner) {
+            isGameRunning = false;
+            cancelAnimationFrame(animationId);
+            alert(`${winner} Wins!`);
+            startButton.style.display = 'block';
+        }
+
+        // Game Loop
+        function gameLoop() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Update Players
+            player1.update(keysPressed);
+            player2.update(keysPressed);
+            player1.draw();
+            player2.draw();
+
+            // Handle Mobile Controls for Player1
+            if (keysPressed['MobileLeft']) {
+                player1.velocityX = -player1.speed;
+            } else if (keysPressed['MobileRight']) {
+                player1.velocityX = player1.speed;
+            } else {
+                player1.velocityX = 0;
+            }
+
+            if (keysPressed['MobileJump'] && player1.onGround) {
+                player1.velocityY = -player1.jumpStrength;
+                player1.onGround = false;
+            }
+
+            // Handle Player2 Controls (Computer Controlled or Second Player)
+            // For simplicity, let's make Player2 controlled by keyboard (WASD)
+            // Alternatively, implement AI for Player2
+
+            // Handle Attacks and Projectiles
+            // Player1's attack
+            if (player1.isAttacking) {
+                // Create a projectile based on attack direction
+                let direction = player1.controls.side;
+                projectiles.push(new Projectile(
+                    direction === 'left' ? player1.x : player1.x + player1.width,
+                    player1.y + player1.height / 2,
+                    direction,
+                    '#FFFF00'
+                ));
+                player1.isAttacking = false; // Reset attack
+            }
+
+            // Player2's attack (for two-player mode)
+            if (player2.isAttacking) {
+                let direction = player2.controls.side;
+                projectiles.push(new Projectile(
+                    direction === 'left' ? player2.x : player2.x + player2.width,
+                    player2.y + player2.height / 2,
+                    direction,
+                    '#FF00FF'
+                ));
+                player2.isAttacking = false;
+            }
+
+            // Update and Draw Projectiles
+            projectiles.forEach((proj, index) => {
+                proj.update();
+                proj.draw();
+
+                // Remove projectile if it goes out of bounds
+                if (proj.x < 0 || proj.x > canvas.width) {
+                    projectiles.splice(index, 1);
+                }
+
+                // Check collision with players
+                if (proj.color === '#FFFF00') { // Player1's projectile hitting Player2
+                    if (isColliding(proj, player2)) {
+                        player2.health -= 10;
+                        projectiles.splice(index, 1);
+                        updateHealth();
+                        if (player2.health <= 0) {
+                            gameOver('Player 1');
+                        }
+                    }
+                } else if (proj.color === '#FF00FF') { // Player2's projectile hitting Player1
+                    if (isColliding(proj, player1)) {
+                        player1.health -= 10;
+                        projectiles.splice(index, 1);
+                        updateHealth();
+                        if (player1.health <= 0) {
+                            gameOver('Player 2');
+                        }
+                    }
+                }
+            });
+
+            // Example for Player2 Attack (Keyboard 'KeyS')
+            if (keysPressed[player2.controls.attack]) {
+                player2.attack();
+            }
+
+            // Example AI for Player2 (Optional)
+            // Implement AI behavior here if Player2 is computer-controlled
+
+            // Continue the loop
+            if (isGameRunning) {
+                animationId = requestAnimationFrame(gameLoop);
+            }
         }
 
         // Start Game Function
         function startGame() {
             isGameRunning = true;
             startButton.style.display = 'none';
-            resetGame();
+            // Reset Players
+            player1.x = 100;
+            player1.y = FLOOR - player1.height;
+            player1.velocityX = 0;
+            player1.velocityY = 0;
+            player1.health = 100;
+
+            player2.x = canvas.width - 150;
+            player2.y = FLOOR - player2.height;
+            player2.velocityX = 0;
+            player2.velocityY = 0;
+            player2.health = 100;
+
+            projectiles = [];
+            updateHealth();
             animationId = requestAnimationFrame(gameLoop);
-        }
-
-        // End Game Function
-        function endGame() {
-            isGameRunning = false;
-            cancelAnimationFrame(animationId);
-            alert(`Game Over! Your Score: ${score}`);
-            startButton.style.display = 'block';
-        }
-
-        // Reset Game Function
-        function resetGame() {
-            // Reset Variables
-            score = 0;
-            updateScore();
-            enemies = [];
-            bullets = [];
-            player.x = canvas.width / 2 - player.width / 2;
-            player.y = canvas.height - player.height - 10;
-            player.velocityX = 0;
-            lastEnemySpawnTime = 0;
         }
 
         // Restart Game Function
@@ -386,7 +493,7 @@
             if (!isGameRunning) {
                 startGame();
             } else {
-                resetGame();
+                // Optionally implement pause or other features
             }
         }
 
@@ -400,7 +507,7 @@
 
         // Responsive Canvas
         function resizeCanvas() {
-            const aspectRatio = 4 / 3;
+            const aspectRatio = 2; // Width : Height = 2:1
             let width = window.innerWidth;
             let height = window.innerHeight;
 
@@ -416,6 +523,45 @@
 
         window.addEventListener('resize', resizeCanvas);
         resizeCanvas();
+
+        // Handle Mobile Controls
+        leftButton.addEventListener('touchstart', function(e) {
+            e.preventDefault();
+            keysPressed['MobileLeft'] = true;
+        });
+
+        leftButton.addEventListener('touchend', function(e) {
+            e.preventDefault();
+            keysPressed['MobileLeft'] = false;
+        });
+
+        rightButton.addEventListener('touchstart', function(e) {
+            e.preventDefault();
+            keysPressed['MobileRight'] = true;
+        });
+
+        rightButton.addEventListener('touchend', function(e) {
+            e.preventDefault();
+            keysPressed['MobileRight'] = false;
+        });
+
+        jumpButton.addEventListener('touchstart', function(e) {
+            e.preventDefault();
+            keysPressed['MobileJump'] = true;
+            player1.velocityY = -player1.jumpStrength;
+            player1.onGround = false;
+        });
+
+        jumpButton.addEventListener('touchend', function(e) {
+            e.preventDefault();
+            keysPressed['MobileJump'] = false;
+        });
+
+        attackButton.addEventListener('touchstart', function(e) {
+            e.preventDefault();
+            player1.attack();
+        });
+
     </script>
 </body>
 </html>
