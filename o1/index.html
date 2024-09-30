@@ -1,174 +1,286 @@
 <!DOCTYPE html>
-<html lang="ja">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>シンプルプラットフォーマー</title>
+    <title>Gungi Battle</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
-        body {
+        /* Reset default styles */
+        * {
             margin: 0;
-            overflow: hidden;
-            background-color: #87CEEB; /* 空の色 */
+            padding: 0;
+            box-sizing: border-box;
         }
-        canvas {
-            display: block;
-            margin: 0 auto;
-            background-color: #87CEEB;
+
+        body {
+            background-color: #2c3e50;
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        #gameContainer {
+            width: 90vmin;
+            height: 90vmin;
+            max-width: 800px;
+            max-height: 800px;
+            background-color: #ecf0f1;
+            border: 2px solid #34495e;
+            position: relative;
+            touch-action: manipulation;
+        }
+
+        #board {
+            width: 100%;
+            height: 100%;
+            display: grid;
+            grid-template-columns: repeat(9, 1fr);
+            grid-template-rows: repeat(9, 1fr);
+            gap: 2px;
+            background-color: #34495e;
+        }
+
+        .cell {
+            background-color: #ecf0f1;
+            position: relative;
+        }
+
+        .cell:hover {
+            background-color: #bdc3c7;
+            cursor: pointer;
+        }
+
+        .piece {
+            width: 80%;
+            height: 80%;
+            border-radius: 50%;
+            position: absolute;
+            top: 10%;
+            left: 10%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            color: #fff;
+            user-select: none;
+        }
+
+        .player1 {
+            background-color: #e74c3c;
+        }
+
+        .player2 {
+            background-color: #3498db;
+        }
+
+        #infoPanel {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: rgba(44, 62, 80, 0.8);
+            color: #ecf0f1;
+            padding: 10px 20px;
+            border-radius: 10px;
+            font-size: 1.2em;
+            z-index: 10;
+        }
+
+        #restartButton {
+            position: absolute;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #27ae60;
+            color: #ecf0f1;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            font-size: 1em;
+            cursor: pointer;
+        }
+
+        #restartButton:hover {
+            background-color: #2ecc71;
+        }
+
+        /* Responsive Design */
+        @media (max-width: 600px) {
+            #infoPanel {
+                font-size: 1em;
+                padding: 8px 16px;
+            }
+
+            #restartButton {
+                font-size: 0.9em;
+                padding: 8px 16px;
+            }
         }
     </style>
 </head>
 <body>
-<canvas id="gameCanvas" width="800" height="450"></canvas>
-<script>
-    const canvas = document.getElementById('gameCanvas');
-    const ctx = canvas.getContext('2d');
+    <div id="gameContainer">
+        <div id="infoPanel">Player 1's Turn</div>
+        <div id="board"></div>
+        <button id="restartButton">Restart Game</button>
+    </div>
 
-    const gravity = 0.5;
-    const friction = 0.8;
+    <script>
+        // Game Constants
+        const BOARD_SIZE = 9;
+        const PLAYER1 = 'player1';
+        const PLAYER2 = 'player2';
 
-    let keys = {};
+        // Game State
+        let currentPlayer = PLAYER1;
+        let boardState = []; // 2D Array to represent the board
+        let selectedPiece = null;
 
-    // プレイヤークラス
-    class Player {
-        constructor() {
-            this.width = 50;
-            this.height = 50;
-            this.x = 100;
-            this.y = canvas.height - this.height - 100;
-            this.velX = 0;
-            this.velY = 0;
-            this.speed = 5;
-            this.jumpStrength = 15;
-            this.onGround = false;
-            this.color = '#FF0000';
+        // Initialize Board State
+        for (let i = 0; i < BOARD_SIZE; i++) {
+            boardState[i] = [];
+            for (let j = 0; j < BOARD_SIZE; j++) {
+                boardState[i][j] = null;
+            }
         }
 
-        update() {
-            // 横移動
-            if (keys['ArrowRight'] || keys['KeyD']) {
-                if (this.velX < this.speed) {
-                    this.velX++;
+        // Initial Piece Placement (Example)
+        // Player 1 pieces on bottom
+        boardState[BOARD_SIZE - 1][4] = { owner: PLAYER1, type: 'King' };
+        boardState[BOARD_SIZE - 2][3] = { owner: PLAYER1, type: 'Knight' };
+        boardState[BOARD_SIZE - 2][5] = { owner: PLAYER1, type: 'Knight' };
+
+        // Player 2 pieces on top
+        boardState[0][4] = { owner: PLAYER2, type: 'King' };
+        boardState[1][3] = { owner: PLAYER2, type: 'Knight' };
+        boardState[1][5] = { owner: PLAYER2, type: 'Knight' };
+
+        // Reference to DOM Elements
+        const boardElement = document.getElementById('board');
+        const infoPanel = document.getElementById('infoPanel');
+        const restartButton = document.getElementById('restartButton');
+
+        // Create Board Cells
+        for (let row = 0; row < BOARD_SIZE; row++) {
+            for (let col = 0; col < BOARD_SIZE; col++) {
+                const cell = document.createElement('div');
+                cell.classList.add('cell');
+                cell.dataset.row = row;
+                cell.dataset.col = col;
+                cell.addEventListener('click', onCellClick);
+                boardElement.appendChild(cell);
+            }
+        }
+
+        // Render the Board
+        function renderBoard() {
+            const cells = document.querySelectorAll('.cell');
+            cells.forEach(cell => {
+                const row = parseInt(cell.dataset.row);
+                const col = parseInt(cell.dataset.col);
+                cell.innerHTML = ''; // Clear previous content
+
+                const piece = boardState[row][col];
+                if (piece) {
+                    const pieceElement = document.createElement('div');
+                    pieceElement.classList.add('piece', piece.owner);
+                    pieceElement.textContent = getPieceSymbol(piece.type);
+                    cell.appendChild(pieceElement);
+                }
+
+                // Highlight selected piece
+                if (selectedPiece && selectedPiece.row === row && selectedPiece.col === col) {
+                    cell.style.boxShadow = '0 0 10px 5px #f1c40f';
+                } else {
+                    cell.style.boxShadow = 'none';
+                }
+            });
+        }
+
+        // Get Piece Symbol
+        function getPieceSymbol(type) {
+            switch(type) {
+                case 'King':
+                    return 'K';
+                case 'Knight':
+                    return 'N';
+                default:
+                    return '';
+            }
+        }
+
+        // Handle Cell Click
+        function onCellClick(e) {
+            const row = parseInt(e.currentTarget.dataset.row);
+            const col = parseInt(e.currentTarget.dataset.col);
+            const clickedPiece = boardState[row][col];
+
+            if (selectedPiece) {
+                // If a piece is selected, attempt to move
+                if (isValidMove(selectedPiece, row, col)) {
+                    // Move the piece
+                    boardState[row][col] = boardState[selectedPiece.row][selectedPiece.col];
+                    boardState[selectedPiece.row][selectedPiece.col] = null;
+
+                    // Check for capture
+                    if (clickedPiece && clickedPiece.owner !== currentPlayer) {
+                        alert(`${currentPlayer === PLAYER1 ? 'Player 1' : 'Player 2'} captured ${clickedPiece.type}!`);
+                    }
+
+                    // Switch Player
+                    currentPlayer = currentPlayer === PLAYER1 ? PLAYER2 : PLAYER1;
+                    infoPanel.textContent = `${currentPlayer === PLAYER1 ? "Player 1's" : "Player 2's"} Turn`;
+                }
+
+                // Deselect after attempting move
+                selectedPiece = null;
+            } else if (clickedPiece && clickedPiece.owner === currentPlayer) {
+                // Select the piece if it belongs to the current player
+                selectedPiece = { row, col };
+            }
+
+            renderBoard();
+        }
+
+        // Validate Move (Simple Example: Move to adjacent cells)
+        function isValidMove(piece, destRow, destCol) {
+            const dRow = Math.abs(destRow - piece.row);
+            const dCol = Math.abs(destCol - piece.col);
+
+            // Example Rule: Move to adjacent cell only
+            return (dRow <= 1 && dCol <= 1);
+        }
+
+        // Restart Game
+        restartButton.addEventListener('click', () => {
+            // Reset Game State
+            currentPlayer = PLAYER1;
+            infoPanel.textContent = "Player 1's Turn";
+            selectedPiece = null;
+
+            // Clear Board
+            for (let i = 0; i < BOARD_SIZE; i++) {
+                for (let j = 0; j < BOARD_SIZE; j++) {
+                    boardState[i][j] = null;
                 }
             }
 
-            if (keys['ArrowLeft'] || keys['KeyA']) {
-                if (this.velX > -this.speed) {
-                    this.velX--;
-                }
-            }
+            // Reinitialize Pieces
+            boardState[BOARD_SIZE - 1][4] = { owner: PLAYER1, type: 'King' };
+            boardState[BOARD_SIZE - 2][3] = { owner: PLAYER1, type: 'Knight' };
+            boardState[BOARD_SIZE - 2][5] = { owner: PLAYER1, type: 'Knight' };
 
-            // ジャンプ
-            if ((keys['ArrowUp'] || keys['KeyW'] || keys['Space']) && this.onGround) {
-                this.velY = -this.jumpStrength;
-                this.onGround = false;
-            }
+            boardState[0][4] = { owner: PLAYER2, type: 'King' };
+            boardState[1][3] = { owner: PLAYER2, type: 'Knight' };
+            boardState[1][5] = { owner: PLAYER2, type: 'Knight' };
 
-            // 重力適用
-            this.velY += gravity;
+            renderBoard();
+        });
 
-            // 速度に摩擦を適用
-            this.velX *= friction;
-
-            // 位置更新
-            this.x += this.velX;
-            this.y += this.velY;
-
-            // 地面との衝突判定
-            if (this.y + this.height >= canvas.height - 50) {
-                this.y = canvas.height - 50 - this.height;
-                this.velY = 0;
-                this.onGround = true;
-            }
-
-            // 壁との衝突判定
-            if (this.x < 0) {
-                this.x = 0;
-                this.velX = 0;
-            }
-
-            if (this.x + this.width > canvas.width) {
-                this.x = canvas.width - this.width;
-                this.velX = 0;
-            }
-        }
-
-        draw() {
-            ctx.fillStyle = this.color;
-            ctx.fillRect(this.x, this.y, this.width, this.height);
-        }
-    }
-
-    // プラットフォームクラス
-    class Platform {
-        constructor(x, y, width, height) {
-            this.x = x;
-            this.y = y;
-            this.width = width;
-            this.height = height;
-            this.color = '#654321';
-        }
-
-        draw() {
-            ctx.fillStyle = this.color;
-            ctx.fillRect(this.x, this.y, this.width, this.height);
-        }
-    }
-
-    // ゲームオブジェクトの初期化
-    const player = new Player();
-    const platforms = [
-        new Platform(0, canvas.height - 50, canvas.width, 50),
-        new Platform(200, canvas.height - 150, 200, 20),
-        new Platform(500, canvas.height - 250, 200, 20),
-        new Platform(300, canvas.height - 350, 200, 20)
-    ];
-
-    // キー入力の監視
-    window.addEventListener('keydown', function(e) {
-        keys[e.code] = true;
-    });
-
-    window.addEventListener('keyup', function(e) {
-        keys[e.code] = false;
-    });
-
-    // 衝突判定関数
-    function checkCollision(player, platform) {
-        if (player.x < platform.x + platform.width &&
-            player.x + player.width > platform.x &&
-            player.y < platform.y + platform.height &&
-            player.y + player.height > platform.y) {
-            
-            // プレイヤーの下側がプラットフォームの上側に接触している場合
-            if (player.velY > 0 && player.y + player.height - player.velY <= platform.y) {
-                player.y = platform.y - player.height;
-                player.velY = 0;
-                player.onGround = true;
-            }
-        }
-    }
-
-    // メインループ
-    function gameLoop() {
-        // 画面をクリア
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-        // プラットフォームを描画
-        platforms.forEach(platform => platform.draw());
-
-        // プレイヤーを更新・描画
-        player.update();
-
-        // 衝突判定
-        player.onGround = false;
-        platforms.forEach(platform => checkCollision(player, platform));
-
-        player.draw();
-
-        requestAnimationFrame(gameLoop);
-    }
-
-    // ゲーム開始
-    gameLoop();
-</script>
+        // Initial Render
+        renderBoard();
+    </script>
 </body>
 </html>
