@@ -3,175 +3,247 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HunterxHunter Gungi</title>
+    <title>Atari's Pong</title>
     <style>
         body {
-            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
             display: flex;
             justify-content: center;
             align-items: center;
             height: 100vh;
-            margin: 0;
-            background-color: #f0f0f0;
+            background-color: #000;
+            font-family: Arial, sans-serif;
+            overflow: hidden;
         }
-        #game-container {
-            text-align: center;
+        #gameContainer {
+            position: relative;
+            width: 100%;
+            max-width: 800px;
+            height: 100vh;
+            max-height: 600px;
         }
-        #board {
-            display: inline-grid;
-            grid-template-columns: repeat(9, 50px);
-            grid-gap: 2px;
-            background-color: #deb887;
-            padding: 10px;
-            border: 2px solid #8b4513;
+        #gameCanvas {
+            width: 100%;
+            height: 100%;
+            background-color: #000;
         }
-        .cell {
-            width: 50px;
-            height: 50px;
-            background-color: #f5deb3;
-            border: 1px solid #d2691e;
+        #startScreen, #gameOverScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
             display: flex;
+            flex-direction: column;
             justify-content: center;
             align-items: center;
-            font-size: 24px;
-            cursor: pointer;
+            background-color: rgba(0, 0, 0, 0.8);
+            color: #fff;
         }
-        #message {
-            margin-top: 20px;
-            font-size: 18px;
-            font-weight: bold;
-        }
-        #reset {
-            margin-top: 20px;
+        button {
             padding: 10px 20px;
-            font-size: 16px;
+            font-size: 18px;
             background-color: #4CAF50;
             color: white;
             border: none;
             cursor: pointer;
+            margin-top: 20px;
         }
-        #reset:hover {
+        button:hover {
             background-color: #45a049;
         }
-        @media (max-width: 600px) {
-            #board {
-                grid-template-columns: repeat(9, 30px);
-            }
-            .cell {
-                width: 30px;
-                height: 30px;
-                font-size: 16px;
-            }
+        #score {
+            position: absolute;
+            top: 10px;
+            left: 0;
+            width: 100%;
+            text-align: center;
+            color: #fff;
+            font-size: 24px;
         }
     </style>
 </head>
 <body>
-    <div id="game-container">
-        <h1>HunterxHunter Gungi</h1>
-        <div id="board"></div>
-        <div id="message"></div>
-        <button id="reset">Reset Game</button>
+    <div id="gameContainer">
+        <canvas id="gameCanvas"></canvas>
+        <div id="score">0 - 0</div>
+        <div id="startScreen">
+            <h1>Atari's Pong</h1>
+            <p>Use mouse or touch to move your paddle</p>
+            <button id="startButton">Start Game</button>
+        </div>
+        <div id="gameOverScreen" style="display: none;">
+            <h1>Game Over</h1>
+            <p id="finalScore"></p>
+            <button id="restartButton">Play Again</button>
+        </div>
     </div>
 
     <script>
-        // Game state
-        let currentPlayer = 'X';
-        let gameBoard = Array(9).fill().map(() => Array(9).fill(''));
-        let gameActive = true;
+        // Get DOM elements
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const startScreen = document.getElementById('startScreen');
+        const gameOverScreen = document.getElementById('gameOverScreen');
+        const startButton = document.getElementById('startButton');
+        const restartButton = document.getElementById('restartButton');
+        const scoreElement = document.getElementById('score');
+        const finalScoreElement = document.getElementById('finalScore');
 
-        // DOM elements
-        const boardElement = document.getElementById('board');
-        const messageElement = document.getElementById('message');
-        const resetButton = document.getElementById('reset');
+        // Game variables
+        let gameLoop;
+        let paddleHeight, paddleWidth, ballSize, ballSpeed;
+        let player1Score = 0, player2Score = 0;
+        let player1Y, player2Y, ballX, ballY, ballDX, ballDY;
 
-        // Initialize the game board
-        function initializeBoard() {
-            boardElement.innerHTML = '';
-            for (let i = 0; i < 9; i++) {
-                for (let j = 0; j < 9; j++) {
-                    const cell = document.createElement('div');
-                    cell.classList.add('cell');
-                    cell.dataset.row = i;
-                    cell.dataset.col = j;
-                    cell.addEventListener('click', handleCellClick);
-                    boardElement.appendChild(cell);
+        // Set up the game
+        function setupGame() {
+            // Set canvas size
+            canvas.width = canvas.offsetWidth;
+            canvas.height = canvas.offsetHeight;
+
+            // Calculate game dimensions based on canvas size
+            paddleHeight = canvas.height / 6;
+            paddleWidth = canvas.width / 50;
+            ballSize = canvas.width / 50;
+            ballSpeed = canvas.width / 200;
+
+            // Initialize positions
+            player1Y = player2Y = (canvas.height - paddleHeight) / 2;
+            ballX = canvas.width / 2;
+            ballY = canvas.height / 2;
+            ballDX = ballSpeed * (Math.random() > 0.5 ? 1 : -1);
+            ballDY = ballSpeed * (Math.random() * 2 - 1);
+        }
+
+        // Draw game objects
+        function draw() {
+            // Clear canvas
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw center line
+            ctx.strokeStyle = '#fff';
+            ctx.setLineDash([5, 15]);
+            ctx.beginPath();
+            ctx.moveTo(canvas.width / 2, 0);
+            ctx.lineTo(canvas.width / 2, canvas.height);
+            ctx.stroke();
+
+            // Draw paddles
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(0, player1Y, paddleWidth, paddleHeight);
+            ctx.fillRect(canvas.width - paddleWidth, player2Y, paddleWidth, paddleHeight);
+
+            // Draw ball
+            ctx.beginPath();
+            ctx.arc(ballX, ballY, ballSize, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Update game state
+        function update() {
+            // Move ball
+            ballX += ballDX;
+            ballY += ballDY;
+
+            // Ball collision with top and bottom
+            if (ballY - ballSize < 0 || ballY + ballSize > canvas.height) {
+                ballDY = -ballDY;
+            }
+
+            // Ball collision with paddles
+            if (
+                (ballX - ballSize < paddleWidth && ballY > player1Y && ballY < player1Y + paddleHeight) ||
+                (ballX + ballSize > canvas.width - paddleWidth && ballY > player2Y && ballY < player2Y + paddleHeight)
+            ) {
+                ballDX = -ballDX * 1.1; // Increase speed slightly
+                ballDY = ((ballY - (ballDX > 0 ? player2Y : player1Y)) / paddleHeight - 0.5) * ballSpeed * 2;
+            }
+
+            // Ball out of bounds
+            if (ballX < 0 || ballX > canvas.width) {
+                if (ballX < 0) player2Score++;
+                else player1Score++;
+
+                updateScore();
+                if (player1Score >= 11 || player2Score >= 11) {
+                    endGame();
+                } else {
+                    resetBall();
                 }
             }
+
+            // AI movement
+            player2Y += (ballY - (player2Y + paddleHeight / 2)) * 0.1;
+            player2Y = Math.max(0, Math.min(canvas.height - paddleHeight, player2Y));
         }
 
-        // Handle cell click event
-        function handleCellClick(e) {
-            if (!gameActive) return;
-
-            const row = parseInt(e.target.dataset.row);
-            const col = parseInt(e.target.dataset.col);
-
-            if (gameBoard[row][col] !== '') return;
-
-            gameBoard[row][col] = currentPlayer;
-            e.target.textContent = currentPlayer;
-
-            if (checkWin(row, col)) {
-                gameActive = false;
-                messageElement.textContent = `Player ${currentPlayer} wins!`;
-            } else if (checkDraw()) {
-                gameActive = false;
-                messageElement.textContent = "It's a draw!";
-            } else {
-                currentPlayer = currentPlayer === 'X' ? 'O' : 'X';
-                messageElement.textContent = `Player ${currentPlayer}'s turn`;
-            }
+        // Reset ball position
+        function resetBall() {
+            ballX = canvas.width / 2;
+            ballY = canvas.height / 2;
+            ballDX = ballSpeed * (Math.random() > 0.5 ? 1 : -1);
+            ballDY = ballSpeed * (Math.random() * 2 - 1);
         }
 
-        // Check for a win condition
-        function checkWin(row, col) {
-            // Check horizontal
-            if (countInDirection(row, col, 0, 1) + countInDirection(row, col, 0, -1) >= 4) return true;
-            // Check vertical
-            if (countInDirection(row, col, 1, 0) + countInDirection(row, col, -1, 0) >= 4) return true;
-            // Check diagonal (top-left to bottom-right)
-            if (countInDirection(row, col, 1, 1) + countInDirection(row, col, -1, -1) >= 4) return true;
-            // Check diagonal (top-right to bottom-left)
-            if (countInDirection(row, col, 1, -1) + countInDirection(row, col, -1, 1) >= 4) return true;
-
-            return false;
+        // Update score display
+        function updateScore() {
+            scoreElement.textContent = `${player1Score} - ${player2Score}`;
         }
 
-        // Count consecutive pieces in a direction
-        function countInDirection(row, col, rowDir, colDir) {
-            let count = 0;
-            let r = row + rowDir;
-            let c = col + colDir;
-
-            while (r >= 0 && r < 9 && c >= 0 && c < 9 && gameBoard[r][c] === currentPlayer) {
-                count++;
-                r += rowDir;
-                c += colDir;
-            }
-
-            return count;
+        // Game loop
+        function gameStep() {
+            update();
+            draw();
+            gameLoop = requestAnimationFrame(gameStep);
         }
 
-        // Check for a draw
-        function checkDraw() {
-            return gameBoard.every(row => row.every(cell => cell !== ''));
+        // Start the game
+        function startGame() {
+            startScreen.style.display = 'none';
+            setupGame();
+            updateScore();
+            gameLoop = requestAnimationFrame(gameStep);
         }
 
-        // Reset the game
-        function resetGame() {
-            gameBoard = Array(9).fill().map(() => Array(9).fill(''));
-            gameActive = true;
-            currentPlayer = 'X';
-            messageElement.textContent = "Player X's turn";
-            initializeBoard();
+        // End the game
+        function endGame() {
+            cancelAnimationFrame(gameLoop);
+            gameOverScreen.style.display = 'flex';
+            finalScoreElement.textContent = `Final Score: ${player1Score} - ${player2Score}`;
         }
 
-        // Event listener for reset button
-        resetButton.addEventListener('click', resetGame);
+        // Restart the game
+        function restartGame() {
+            gameOverScreen.style.display = 'none';
+            player1Score = player2Score = 0;
+            startGame();
+        }
 
-        // Initialize the game
-        initializeBoard();
-        messageElement.textContent = "Player X's turn";
+        // Event listeners
+        startButton.addEventListener('click', startGame);
+        restartButton.addEventListener('click', restartGame);
+
+        // Handle paddle movement
+        function handleMove(e) {
+            const rect = canvas.getBoundingClientRect();
+            const root = document.documentElement;
+            const mouseY = (e.clientY || e.touches[0].clientY) - rect.top - root.scrollTop;
+            player1Y = Math.max(0, Math.min(canvas.height - paddleHeight, mouseY - paddleHeight / 2));
+        }
+
+        canvas.addEventListener('mousemove', handleMove);
+        canvas.addEventListener('touchmove', handleMove);
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            setupGame();
+        });
+
+        // Initial setup
+        setupGame();
     </script>
 </body>
 </html>
