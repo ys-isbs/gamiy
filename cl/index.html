@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>スイカゲーム</title>
+    <style>
+        canvas {
+            border: 1px solid black;
+            display: block;
+            margin: 0 auto;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas" width="400" height="600"></canvas>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        const FRUITS = [
+            {name: 'Cherry', radius: 15, color: '#FF0000', score: 1},
+            {name: 'Strawberry', radius: 25, color: '#FF69B4', score: 3},
+            {name: 'Grape', radius: 35, color: '#8A2BE2', score: 6},
+            {name: 'Orange', radius: 45, color: '#FFA500', score: 10},
+            {name: 'Persimmon', radius: 55, color: '#FF4500', score: 15},
+            {name: 'Apple', radius: 65, color: '#FF0000', score: 21},
+            {name: 'Pear', radius: 75, color: '#90EE90', score: 28},
+            {name: 'Peach', radius: 85, color: '#FFA07A', score: 36},
+            {name: 'Pineapple', radius: 95, color: '#FFD700', score: 45},
+            {name: 'Melon', radius: 105, color: '#98FB98', score: 55},
+            {name: 'Watermelon', radius: 115, color: '#006400', score: 66},
+        ];
+
+        let fruits = [];
+        let currentFruit = null;
+        let score = 0;
+        let gameOver = false;
+
+        function createFruit(x, y, fruitIndex) {
+            return {
+                x: x,
+                y: y,
+                vy: 0,
+                fruit: FRUITS[fruitIndex],
+            };
+        }
+
+        function update() {
+            if (gameOver) return;
+
+            if (!currentFruit) {
+                const randomFruitIndex = Math.floor(Math.random() * 5); // 最初の5種類のフルーツからランダムに選択
+                currentFruit = createFruit(canvas.width / 2, 30, randomFruitIndex);
+            }
+
+            currentFruit.y += currentFruit.vy;
+            currentFruit.vy += 0.2; // 重力
+
+            // 壁との衝突判定
+            if (currentFruit.x - currentFruit.fruit.radius < 0 || currentFruit.x + currentFruit.fruit.radius > canvas.width) {
+                currentFruit.x = Math.max(currentFruit.fruit.radius, Math.min(canvas.width - currentFruit.fruit.radius, currentFruit.x));
+            }
+
+            // 床との衝突判定
+            if (currentFruit.y + currentFruit.fruit.radius > canvas.height) {
+                currentFruit.y = canvas.height - currentFruit.fruit.radius;
+                fruits.push(currentFruit);
+                currentFruit = null;
+            }
+
+            // フルーツ同士の衝突判定
+            for (let i = 0; i < fruits.length; i++) {
+                const fruit = fruits[i];
+                if (currentFruit && checkCollision(currentFruit, fruit)) {
+                    fruits.push(currentFruit);
+                    currentFruit = null;
+                    break;
+                }
+            }
+
+            // フルーツの結合
+            for (let i = 0; i < fruits.length; i++) {
+                for (let j = i + 1; j < fruits.length; j++) {
+                    if (fruits[i].fruit === fruits[j].fruit && checkCollision(fruits[i], fruits[j])) {
+                        const nextFruitIndex = FRUITS.indexOf(fruits[i].fruit) + 1;
+                        if (nextFruitIndex < FRUITS.length) {
+                            const newX = (fruits[i].x + fruits[j].x) / 2;
+                            const newY = (fruits[i].y + fruits[j].y) / 2;
+                            fruits.splice(j, 1);
+                            fruits[i] = createFruit(newX, newY, nextFruitIndex);
+                            score += FRUITS[nextFruitIndex].score;
+                        } else {
+                            fruits.splice(j, 1);
+                            fruits.splice(i, 1);
+                            score += 100; // ボーナススコア
+                        }
+                        i--; // インデックスを調整
+                        break;
+                    }
+                }
+            }
+
+            // ゲームオーバー判定
+            if (fruits.some(fruit => fruit.y - fruit.fruit.radius < 50)) {
+                gameOver = true;
+            }
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // フルーツを描画
+            fruits.forEach(drawFruit);
+            if (currentFruit) {
+                drawFruit(currentFruit);
+            }
+
+            // スコアを描画
+            ctx.fillStyle = 'black';
+            ctx.font = '20px Arial';
+            ctx.fillText(`Score: ${score}`, 10, 30);
+
+            if (gameOver) {
+                ctx.fillStyle = 'red';
+                ctx.font = '40px Arial';
+                ctx.fillText('GAME OVER', canvas.width / 2 - 100, canvas.height / 2);
+            }
+        }
+
+        function drawFruit(fruit) {
+            ctx.beginPath();
+            ctx.arc(fruit.x, fruit.y, fruit.fruit.radius, 0, Math.PI * 2);
+            ctx.fillStyle = fruit.fruit.color;
+            ctx.fill();
+            ctx.closePath();
+        }
+
+        function checkCollision(fruit1, fruit2) {
+            const dx = fruit1.x - fruit2.x;
+            const dy = fruit1.y - fruit2.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            return distance < fruit1.fruit.radius + fruit2.fruit.radius;
+        }
+
+        function gameLoop() {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (currentFruit && !gameOver) {
+                const rect = canvas.getBoundingClientRect();
+                currentFruit.x = e.clientX - rect.left;
+            }
+        });
+
+        canvas.addEventListener('click', () => {
+            if (currentFruit && !gameOver) {
+                currentFruit.vy = 5; // フルーツを落とす
+            }
+        });
+
+        gameLoop();
+    </script>
+</body>
+</html>
