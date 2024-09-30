@@ -1,121 +1,177 @@
 <!DOCTYPE html>
-<html lang="ja">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>シンプルプラットフォーマー</title>
+    <title>HunterxHunter Gungi</title>
     <style>
-        canvas {
-            border: 1px solid black;
-            display: block;
-            margin: 0 auto;
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+        }
+        #game-container {
+            text-align: center;
+        }
+        #board {
+            display: inline-grid;
+            grid-template-columns: repeat(9, 50px);
+            grid-gap: 2px;
+            background-color: #deb887;
+            padding: 10px;
+            border: 2px solid #8b4513;
+        }
+        .cell {
+            width: 50px;
+            height: 50px;
+            background-color: #f5deb3;
+            border: 1px solid #d2691e;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 24px;
+            cursor: pointer;
+        }
+        #message {
+            margin-top: 20px;
+            font-size: 18px;
+            font-weight: bold;
+        }
+        #reset {
+            margin-top: 20px;
+            padding: 10px 20px;
+            font-size: 16px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        #reset:hover {
+            background-color: #45a049;
+        }
+        @media (max-width: 600px) {
+            #board {
+                grid-template-columns: repeat(9, 30px);
+            }
+            .cell {
+                width: 30px;
+                height: 30px;
+                font-size: 16px;
+            }
         }
     </style>
 </head>
 <body>
-    <canvas id="gameCanvas" width="800" height="400"></canvas>
+    <div id="game-container">
+        <h1>HunterxHunter Gungi</h1>
+        <div id="board"></div>
+        <div id="message"></div>
+        <button id="reset">Reset Game</button>
+    </div>
+
     <script>
-        const canvas = document.getElementById('gameCanvas');
-        const ctx = canvas.getContext('2d');
+        // Game state
+        let currentPlayer = 'X';
+        let gameBoard = Array(9).fill().map(() => Array(9).fill(''));
+        let gameActive = true;
 
-        // ゲーム状態
-        const gameState = {
-            player: {
-                x: 50,
-                y: 200,
-                width: 30,
-                height: 30,
-                speed: 5,
-                jumpForce: 10,
-                velocityY: 0,
-                isJumping: false
-            },
-            platforms: [
-                {x: 0, y: 350, width: 800, height: 50},
-                {x: 300, y: 250, width: 200, height: 20},
-                {x: 600, y: 150, width: 150, height: 20}
-            ],
-            gravity: 0.5,
-            keys: {}
-        };
+        // DOM elements
+        const boardElement = document.getElementById('board');
+        const messageElement = document.getElementById('message');
+        const resetButton = document.getElementById('reset');
 
-        // キー入力の処理
-        document.addEventListener('keydown', (e) => {
-            gameState.keys[e.code] = true;
-        });
-
-        document.addEventListener('keyup', (e) => {
-            gameState.keys[e.code] = false;
-        });
-
-        // プレイヤーの更新
-        function updatePlayer() {
-            // 左右移動
-            if (gameState.keys['ArrowLeft']) {
-                gameState.player.x -= gameState.player.speed;
-            }
-            if (gameState.keys['ArrowRight']) {
-                gameState.player.x += gameState.player.speed;
-            }
-
-            // ジャンプ
-            if (gameState.keys['Space'] && !gameState.player.isJumping) {
-                gameState.player.velocityY = -gameState.player.jumpForce;
-                gameState.player.isJumping = true;
-            }
-
-            // 重力の適用
-            gameState.player.velocityY += gameState.gravity;
-            gameState.player.y += gameState.player.velocityY;
-
-            // プラットフォームとの衝突検出
-            gameState.platforms.forEach(platform => {
-                if (
-                    gameState.player.x < platform.x + platform.width &&
-                    gameState.player.x + gameState.player.width > platform.x &&
-                    gameState.player.y + gameState.player.height > platform.y &&
-                    gameState.player.y < platform.y + platform.height
-                ) {
-                    // 上からの衝突
-                    if (gameState.player.velocityY > 0) {
-                        gameState.player.isJumping = false;
-                        gameState.player.velocityY = 0;
-                        gameState.player.y = platform.y - gameState.player.height;
-                    }
+        // Initialize the game board
+        function initializeBoard() {
+            boardElement.innerHTML = '';
+            for (let i = 0; i < 9; i++) {
+                for (let j = 0; j < 9; j++) {
+                    const cell = document.createElement('div');
+                    cell.classList.add('cell');
+                    cell.dataset.row = i;
+                    cell.dataset.col = j;
+                    cell.addEventListener('click', handleCellClick);
+                    boardElement.appendChild(cell);
                 }
-            });
-
-            // 画面外に出ないように制限
-            gameState.player.x = Math.max(0, Math.min(canvas.width - gameState.player.width, gameState.player.x));
-            gameState.player.y = Math.min(canvas.height - gameState.player.height, gameState.player.y);
+            }
         }
 
-        // 描画関数
-        function draw() {
-            // 背景のクリア
-            ctx.fillStyle = 'skyblue';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        // Handle cell click event
+        function handleCellClick(e) {
+            if (!gameActive) return;
 
-            // プレイヤーの描画
-            ctx.fillStyle = 'red';
-            ctx.fillRect(gameState.player.x, gameState.player.y, gameState.player.width, gameState.player.height);
+            const row = parseInt(e.target.dataset.row);
+            const col = parseInt(e.target.dataset.col);
 
-            // プラットフォームの描画
-            ctx.fillStyle = 'green';
-            gameState.platforms.forEach(platform => {
-                ctx.fillRect(platform.x, platform.y, platform.width, platform.height);
-            });
+            if (gameBoard[row][col] !== '') return;
+
+            gameBoard[row][col] = currentPlayer;
+            e.target.textContent = currentPlayer;
+
+            if (checkWin(row, col)) {
+                gameActive = false;
+                messageElement.textContent = `Player ${currentPlayer} wins!`;
+            } else if (checkDraw()) {
+                gameActive = false;
+                messageElement.textContent = "It's a draw!";
+            } else {
+                currentPlayer = currentPlayer === 'X' ? 'O' : 'X';
+                messageElement.textContent = `Player ${currentPlayer}'s turn`;
+            }
         }
 
-        // ゲームループ
-        function gameLoop() {
-            updatePlayer();
-            draw();
-            requestAnimationFrame(gameLoop);
+        // Check for a win condition
+        function checkWin(row, col) {
+            // Check horizontal
+            if (countInDirection(row, col, 0, 1) + countInDirection(row, col, 0, -1) >= 4) return true;
+            // Check vertical
+            if (countInDirection(row, col, 1, 0) + countInDirection(row, col, -1, 0) >= 4) return true;
+            // Check diagonal (top-left to bottom-right)
+            if (countInDirection(row, col, 1, 1) + countInDirection(row, col, -1, -1) >= 4) return true;
+            // Check diagonal (top-right to bottom-left)
+            if (countInDirection(row, col, 1, -1) + countInDirection(row, col, -1, 1) >= 4) return true;
+
+            return false;
         }
 
-        // ゲーム開始
-        gameLoop();
+        // Count consecutive pieces in a direction
+        function countInDirection(row, col, rowDir, colDir) {
+            let count = 0;
+            let r = row + rowDir;
+            let c = col + colDir;
+
+            while (r >= 0 && r < 9 && c >= 0 && c < 9 && gameBoard[r][c] === currentPlayer) {
+                count++;
+                r += rowDir;
+                c += colDir;
+            }
+
+            return count;
+        }
+
+        // Check for a draw
+        function checkDraw() {
+            return gameBoard.every(row => row.every(cell => cell !== ''));
+        }
+
+        // Reset the game
+        function resetGame() {
+            gameBoard = Array(9).fill().map(() => Array(9).fill(''));
+            gameActive = true;
+            currentPlayer = 'X';
+            messageElement.textContent = "Player X's turn";
+            initializeBoard();
+        }
+
+        // Event listener for reset button
+        resetButton.addEventListener('click', resetGame);
+
+        // Initialize the game
+        initializeBoard();
+        messageElement.textContent = "Player X's turn";
     </script>
 </body>
 </html>
