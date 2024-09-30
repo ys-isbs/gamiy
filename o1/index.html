@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Atari Ping Pong</title>
+    <title>Shooting Game</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
         /* Reset default styles */
@@ -14,7 +14,7 @@
 
         /* Body styling */
         body {
-            background-color: #000;
+            background-color: #111;
             display: flex;
             justify-content: center;
             align-items: center;
@@ -26,9 +26,10 @@
 
         /* Game Canvas */
         canvas {
-            background-color: #111;
+            background-color: #222;
             border: 2px solid #fff;
             border-radius: 10px;
+            display: block;
         }
 
         /* Score Display */
@@ -93,11 +94,15 @@
         #rightButton {
             left: 100px;
         }
+
+        #shootButton {
+            right: 20px;
+        }
     </style>
 </head>
 <body>
     <!-- Score Display -->
-    <div id="scoreBoard">Player 1: 0 | Player 2: 0</div>
+    <div id="scoreBoard">Score: 0</div>
 
     <!-- Start/Restart Button -->
     <button id="startButton">Start Game</button>
@@ -106,8 +111,9 @@
     <canvas id="gameCanvas" width="800" height="600"></canvas>
 
     <!-- Mobile Control Buttons -->
-    <button id="leftButton" class="control-button">◀</button>
-    <button id="rightButton" class="control-button">▶</button>
+    <button id="leftButton" class="control-button">⬅️</button>
+    <button id="rightButton" class="control-button">➡️</button>
+    <button id="shootButton" class="control-button">🔫</button>
 
     <script>
         // Get DOM Elements
@@ -117,28 +123,25 @@
         const startButton = document.getElementById('startButton');
         const leftButton = document.getElementById('leftButton');
         const rightButton = document.getElementById('rightButton');
+        const shootButton = document.getElementById('shootButton');
 
         // Game Variables
         let animationId;
         let isGameRunning = false;
+        let score = 0;
 
-        // Scores
-        let scorePlayer1 = 0;
-        let scorePlayer2 = 0;
-
-        // Paddle Class
-        class Paddle {
-            constructor(x, y, width, height, color, upKey, downKey) {
-                this.x = x;
-                this.y = y;
-                this.width = width;
-                this.height = height;
-                this.color = color;
+        // Player Class
+        class Player {
+            constructor() {
+                this.width = 50;
+                this.height = 50;
+                this.x = canvas.width / 2 - this.width / 2;
+                this.y = canvas.height - this.height - 10;
                 this.speed = 7;
-                this.moveUp = false;
-                this.moveDown = false;
-                this.touchMoveLeft = false;
-                this.touchMoveRight = false;
+                this.color = '#00FF00';
+                this.velocityX = 0;
+                this.canShoot = true;
+                this.shootCooldown = 500; // milliseconds
             }
 
             draw() {
@@ -147,111 +150,72 @@
             }
 
             update() {
-                if (this.moveUp) {
-                    this.y -= this.speed;
-                }
-                if (this.moveDown) {
-                    this.y += this.speed;
-                }
+                this.x += this.velocityX;
 
-                // Prevent paddle from going out of bounds
-                if (this.y < 0) this.y = 0;
-                if (this.y + this.height > canvas.height) this.y = canvas.height - this.height;
+                // Prevent player from moving out of bounds
+                if (this.x < 0) this.x = 0;
+                if (this.x + this.width > canvas.width) this.x = canvas.width - this.width;
             }
 
-            // For Mobile Controls
-            mobileMove(direction) {
-                if (direction === 'left') {
-                    this.y -= this.speed;
-                } else if (direction === 'right') {
-                    this.y += this.speed;
+            shoot() {
+                if (this.canShoot) {
+                    bullets.push(new Bullet(this.x + this.width / 2, this.y));
+                    this.canShoot = false;
+                    setTimeout(() => {
+                        this.canShoot = true;
+                    }, this.shootCooldown);
                 }
-
-                // Prevent paddle from going out of bounds
-                if (this.y < 0) this.y = 0;
-                if (this.y + this.height > canvas.height) this.y = canvas.height - this.height;
             }
         }
 
-        // Ball Class
-        class Ball {
-            constructor(x, y, radius, color) {
+        // Enemy Class
+        class Enemy {
+            constructor(x, y, speed) {
+                this.width = 40;
+                this.height = 40;
                 this.x = x;
                 this.y = y;
-                this.radius = radius;
-                this.color = color;
-                this.speed = 5;
-                this.velocityX = this.speed;
-                this.velocityY = this.speed;
+                this.speed = speed;
+                this.color = '#FF0000';
             }
 
             draw() {
-                ctx.beginPath();
-                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
                 ctx.fillStyle = this.color;
-                ctx.fill();
-                ctx.closePath();
+                ctx.fillRect(this.x, this.y, this.width, this.height);
             }
 
-            update(paddle1, paddle2) {
-                this.x += this.velocityX;
-                this.y += this.velocityY;
-
-                // Top and Bottom Collision
-                if (this.y - this.radius < 0 || this.y + this.radius > canvas.height) {
-                    this.velocityY = -this.velocityY;
-                }
-
-                // Paddle Collision
-                if (this.x - this.radius < paddle1.x + paddle1.width &&
-                    this.y > paddle1.y &&
-                    this.y < paddle1.y + paddle1.height) {
-                    this.velocityX = -this.velocityX;
-                    this.x = paddle1.x + paddle1.width + this.radius; // Prevent sticking
-                }
-
-                if (this.x + this.radius > paddle2.x &&
-                    this.y > paddle2.y &&
-                    this.y < paddle2.y + paddle2.height) {
-                    this.velocityX = -this.velocityX;
-                    this.x = paddle2.x - this.radius; // Prevent sticking
-                }
-
-                // Left and Right Goals
-                if (this.x - this.radius < 0) {
-                    scorePlayer2++;
-                    updateScore();
-                    resetBall();
-                }
-
-                if (this.x + this.radius > canvas.width) {
-                    scorePlayer1++;
-                    updateScore();
-                    resetBall();
-                }
+            update() {
+                this.y += this.speed;
             }
         }
 
-        // Initialize Paddles and Ball
-        const paddleWidth = 20;
-        const paddleHeight = 100;
-        const paddle1 = new Paddle(30, canvas.height / 2 - paddleHeight / 2, paddleWidth, paddleHeight, '#fff', 'w', 's');
-        const paddle2 = new Paddle(canvas.width - 30 - paddleWidth, canvas.height / 2 - paddleHeight / 2, paddleWidth, paddleHeight, '#fff', 'ArrowUp', 'ArrowDown');
-        const ball = new Ball(canvas.width / 2, canvas.height / 2, 10, '#fff');
+        // Bullet Class
+        class Bullet {
+            constructor(x, y) {
+                this.width = 5;
+                this.height = 10;
+                this.x = x - this.width / 2;
+                this.y = y;
+                this.speed = 10;
+                this.color = '#FFFF00';
+            }
 
-        // Update Score Display
-        function updateScore() {
-            scoreBoard.textContent = `Player 1: ${scorePlayer1} | Player 2: ${scorePlayer2}`;
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.fillRect(this.x, this.y, this.width, this.height);
+            }
+
+            update() {
+                this.y -= this.speed;
+            }
         }
 
-        // Reset Ball to Center
-        function resetBall() {
-            ball.x = canvas.width / 2;
-            ball.y = canvas.height / 2;
-            // Randomize initial direction
-            ball.velocityX = ball.speed * (Math.random() > 0.5 ? 1 : -1);
-            ball.velocityY = ball.speed * (Math.random() > 0.5 ? 1 : -1);
-        }
+        // Initialize Game Objects
+        const player = new Player();
+        let enemies = [];
+        let bullets = [];
+        let enemySpawnInterval;
+        let lastEnemySpawnTime = 0;
 
         // Handle Keyboard Input
         const keys = {};
@@ -259,7 +223,7 @@
         window.addEventListener('keydown', function(e) {
             keys[e.code] = true;
             // Prevent default scrolling for arrow keys and space
-            if(['ArrowUp','ArrowDown','Space'].includes(e.code)) {
+            if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code)) {
                 e.preventDefault();
             }
         });
@@ -271,76 +235,163 @@
         // Handle Mobile Button Presses
         leftButton.addEventListener('touchstart', function(e) {
             e.preventDefault();
-            paddle1.mobileMove('left');
+            keys['MobileLeft'] = true;
+        });
+
+        leftButton.addEventListener('touchend', function(e) {
+            e.preventDefault();
+            keys['MobileLeft'] = false;
         });
 
         rightButton.addEventListener('touchstart', function(e) {
             e.preventDefault();
-            paddle1.mobileMove('right');
+            keys['MobileRight'] = true;
         });
 
-        // Main Game Loop
-        function gameLoop() {
+        rightButton.addEventListener('touchend', function(e) {
+            e.preventDefault();
+            keys['MobileRight'] = false;
+        });
+
+        shootButton.addEventListener('touchstart', function(e) {
+            e.preventDefault();
+            player.shoot();
+        });
+
+        // Handle Mouse Click for Shooting
+        canvas.addEventListener('click', function(e) {
+            player.shoot();
+        });
+
+        // Handle Touch for Shooting
+        canvas.addEventListener('touchstart', function(e) {
+            e.preventDefault();
+            player.shoot();
+        }, { passive: false });
+
+        // Game Loop
+        function gameLoop(timestamp) {
             // Clear Canvas
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // Update Paddles based on keys
-            if (keys['ArrowUp'] || keys['KeyW']) {
-                paddle1.moveUp = true;
+            // Update Player Velocity based on keys
+            if (keys['ArrowLeft'] || keys['KeyA'] || keys['MobileLeft']) {
+                player.velocityX = -player.speed;
+            } else if (keys['ArrowRight'] || keys['KeyD'] || keys['MobileRight']) {
+                player.velocityX = player.speed;
             } else {
-                paddle1.moveUp = false;
+                player.velocityX = 0;
             }
 
-            if (keys['ArrowDown'] || keys['KeyS']) {
-                paddle1.moveDown = true;
-            } else {
-                paddle1.moveDown = false;
+            // Update and Draw Player
+            player.update();
+            player.draw();
+
+            // Spawn Enemies at Intervals
+            if (!lastEnemySpawnTime || timestamp - lastEnemySpawnTime > 1000) { // Every 1 second
+                const enemyX = Math.random() * (canvas.width - 40);
+                const enemySpeed = 2 + Math.random() * 3; // Speed between 2 and 5
+                enemies.push(new Enemy(enemyX, -40, enemySpeed));
+                lastEnemySpawnTime = timestamp;
             }
 
-            if (keys['ArrowUp']) {
-                paddle2.moveUp = true;
-            } else {
-                paddle2.moveUp = false;
-            }
+            // Update and Draw Enemies
+            enemies.forEach((enemy, enemyIndex) => {
+                enemy.update();
+                enemy.draw();
 
-            if (keys['ArrowDown']) {
-                paddle2.moveDown = true;
-            } else {
-                paddle2.moveDown = false;
-            }
+                // Check for collision with player
+                if (isColliding(player, enemy)) {
+                    endGame();
+                }
 
-            // Update and Draw Paddles
-            paddle1.update();
-            paddle2.update();
-            paddle1.draw();
-            paddle2.draw();
+                // Remove enemies that have moved out of the canvas
+                if (enemy.y > canvas.height) {
+                    enemies.splice(enemyIndex, 1);
+                }
+            });
 
-            // Update and Draw Ball
-            ball.update(paddle1, paddle2);
-            ball.draw();
+            // Update and Draw Bullets
+            bullets.forEach((bullet, bulletIndex) => {
+                bullet.update();
+                bullet.draw();
+
+                // Remove bullets that have moved out of the canvas
+                if (bullet.y < -bullet.height) {
+                    bullets.splice(bulletIndex, 1);
+                }
+
+                // Check for collision with enemies
+                enemies.forEach((enemy, enemyIndex) => {
+                    if (isColliding(bullet, enemy)) {
+                        // Remove enemy and bullet
+                        enemies.splice(enemyIndex, 1);
+                        bullets.splice(bulletIndex, 1);
+                        score += 10;
+                        updateScore();
+                    }
+                });
+            });
 
             // Continue the loop
+            if (isGameRunning) {
+                animationId = requestAnimationFrame(gameLoop);
+            }
+        }
+
+        // Collision Detection Function
+        function isColliding(rect1, rect2) {
+            return rect1.x < rect2.x + rect2.width &&
+                   rect1.x + rect1.width > rect2.x &&
+                   rect1.y < rect2.y + rect2.height &&
+                   rect1.y + rect1.height > rect2.y;
+        }
+
+        // Update Score Display
+        function updateScore() {
+            scoreBoard.textContent = `Score: ${score}`;
+        }
+
+        // Start Game Function
+        function startGame() {
+            isGameRunning = true;
+            startButton.style.display = 'none';
+            resetGame();
             animationId = requestAnimationFrame(gameLoop);
         }
 
-        // Start Game
-        startButton.addEventListener('click', function() {
-            if (!isGameRunning) {
-                isGameRunning = true;
-                startButton.style.display = 'none';
-                resetBall();
-                gameLoop();
-            } else {
-                // Restart the game
-                scorePlayer1 = 0;
-                scorePlayer2 = 0;
-                updateScore();
-                resetBall();
-            }
-        });
+        // End Game Function
+        function endGame() {
+            isGameRunning = false;
+            cancelAnimationFrame(animationId);
+            alert(`Game Over! Your Score: ${score}`);
+            startButton.style.display = 'block';
+        }
 
-        // Initialize Score
-        updateScore();
+        // Reset Game Function
+        function resetGame() {
+            // Reset Variables
+            score = 0;
+            updateScore();
+            enemies = [];
+            bullets = [];
+            player.x = canvas.width / 2 - player.width / 2;
+            player.y = canvas.height - player.height - 10;
+            player.velocityX = 0;
+            lastEnemySpawnTime = 0;
+        }
+
+        // Restart Game Function
+        function restartGame() {
+            if (!isGameRunning) {
+                startGame();
+            } else {
+                resetGame();
+            }
+        }
+
+        // Start Button Event Listener
+        startButton.addEventListener('click', startGame);
 
         // Prevent scrolling on touch devices when using controls
         window.addEventListener('touchmove', function(e) {
