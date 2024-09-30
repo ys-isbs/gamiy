@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pong Game - Atari's Classic</title>
+    <title>Shooting Game</title>
     <style>
         * {
             margin: 0;
@@ -11,180 +11,228 @@
             box-sizing: border-box;
         }
         body {
+            font-family: Arial, sans-serif;
             display: flex;
             justify-content: center;
             align-items: center;
             height: 100vh;
             background-color: #000;
-            font-family: Arial, sans-serif;
             color: #fff;
+            overflow: hidden;
         }
         canvas {
-            background-color: #333;
+            background-color: #222;
             border: 2px solid #fff;
         }
         #scoreBoard {
-            text-align: center;
-            margin-top: 20px;
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            font-size: 18px;
         }
     </style>
 </head>
 <body>
 
-<canvas id="pongCanvas" width="800" height="400"></canvas>
-<div id="scoreBoard">
-    <h2>Pong Game</h2>
-    <p><strong>Player 1 (W/S) | Player 2 (Up/Down Arrows)</strong></p>
-    <p>Score: <span id="score">0 - 0</span></p>
-</div>
+<canvas id="gameCanvas" width="800" height="600"></canvas>
+<div id="scoreBoard">Score: <span id="score">0</span></div>
 
 <script>
-    // Game setup
-    const canvas = document.getElementById('pongCanvas');
+    // Setup the canvas
+    const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
     const scoreDisplay = document.getElementById('score');
 
-    const paddleWidth = 10, paddleHeight = 100;
-    let paddle1Y = canvas.height / 2 - paddleHeight / 2;
-    let paddle2Y = canvas.height / 2 - paddleHeight / 2;
-    const paddleSpeed = 7;
+    // Game settings
+    let score = 0;
+    let gameOver = false;
+    const playerSpeed = 7;
+    const bulletSpeed = 5;
+    const enemySpeed = 2;
 
-    // Ball properties
-    let ballX = canvas.width / 2;
-    let ballY = canvas.height / 2;
-    const ballRadius = 10;
-    let ballSpeedX = 5;
-    let ballSpeedY = 3;
+    // Player object
+    const player = {
+        width: 50,
+        height: 20,
+        x: canvas.width / 2 - 25,
+        y: canvas.height - 40,
+        speed: playerSpeed,
+        dx: 0
+    };
 
-    // Scores
-    let score1 = 0;
-    let score2 = 0;
-    const winningScore = 10;
+    // Bullets array
+    const bullets = [];
 
-    // Game state
-    let isGameOver = false;
+    // Enemies array
+    const enemies = [];
 
-    // Paddle control state
-    let paddle1Up = false, paddle1Down = false;
-    let paddle2Up = false, paddle2Down = false;
-
-    // Event listeners for controls
-    document.addEventListener('keydown', function(event) {
-        if (event.key === 'w') paddle1Up = true;
-        if (event.key === 's') paddle1Down = true;
-        if (event.key === 'ArrowUp') paddle2Up = true;
-        if (event.key === 'ArrowDown') paddle2Down = true;
-    });
-
-    document.addEventListener('keyup', function(event) {
-        if (event.key === 'w') paddle1Up = false;
-        if (event.key === 's') paddle1Down = false;
-        if (event.key === 'ArrowUp') paddle2Up = false;
-        if (event.key === 'ArrowDown') paddle2Down = false;
-    });
+    // Key press event listeners
+    document.addEventListener('keydown', keyDownHandler);
+    document.addEventListener('keyup', keyUpHandler);
 
     // Mobile touch controls
-    canvas.addEventListener('touchmove', function(event) {
-        const touchY = event.touches[0].clientY;
-        if (touchY < canvas.height / 2) paddle1Up = true, paddle1Down = false;
-        else paddle1Up = false, paddle1Down = true;
-    });
+    canvas.addEventListener('touchstart', handleTouchStart);
+    canvas.addEventListener('touchmove', handleTouchMove);
+    canvas.addEventListener('touchend', shootBullet);
 
-    function resetBall() {
-        ballX = canvas.width / 2;
-        ballY = canvas.height / 2;
-        ballSpeedX = -ballSpeedX;
-        ballSpeedY = 3;
+    // Initialize touch variables
+    let touchStartX = 0;
+
+    // Create bullet function
+    function shootBullet() {
+        bullets.push({
+            x: player.x + player.width / 2 - 2.5,
+            y: player.y,
+            width: 5,
+            height: 10
+        });
     }
 
-    function updateGame() {
-        // Move paddles
-        if (paddle1Up && paddle1Y > 0) paddle1Y -= paddleSpeed;
-        if (paddle1Down && paddle1Y < canvas.height - paddleHeight) paddle1Y += paddleSpeed;
-        if (paddle2Up && paddle2Y > 0) paddle2Y -= paddleSpeed;
-        if (paddle2Down && paddle2Y < canvas.height - paddleHeight) paddle2Y += paddleSpeed;
-
-        // Move the ball
-        ballX += ballSpeedX;
-        ballY += ballSpeedY;
-
-        // Ball collision with top and bottom walls
-        if (ballY + ballRadius > canvas.height || ballY - ballRadius < 0) {
-            ballSpeedY = -ballSpeedY;
-        }
-
-        // Ball collision with paddles
-        if (ballX - ballRadius < paddleWidth && ballY > paddle1Y && ballY < paddle1Y + paddleHeight) {
-            ballSpeedX = -ballSpeedX;
-        }
-
-        if (ballX + ballRadius > canvas.width - paddleWidth && ballY > paddle2Y && ballY < paddle2Y + paddleHeight) {
-            ballSpeedX = -ballSpeedX;
-        }
-
-        // Ball goes out of bounds (left or right)
-        if (ballX - ballRadius < 0) {
-            score2++;
-            resetBall();
-        }
-        if (ballX + ballRadius > canvas.width) {
-            score1++;
-            resetBall();
-        }
-
-        // Check if the game is over
-        if (score1 >= winningScore || score2 >= winningScore) {
-            isGameOver = true;
-        }
-
-        // Update the score display
-        scoreDisplay.textContent = `${score1} - ${score2}`;
-
-        // Game over logic
-        if (isGameOver) {
-            ctx.font = '30px Arial';
-            ctx.fillStyle = '#fff';
-            ctx.fillText(`Player ${score1 >= winningScore ? '1' : '2'} Wins!`, canvas.width / 2 - 100, canvas.height / 2);
-            return;
-        }
-
-        // Render everything
-        renderGame();
+    // Create enemy function
+    function createEnemy() {
+        const x = Math.random() * (canvas.width - 50);
+        enemies.push({
+            x: x,
+            y: -50,
+            width: 50,
+            height: 30
+        });
     }
 
-    function renderGame() {
-        // Clear the canvas
+    // Handle key down event
+    function keyDownHandler(event) {
+        if (event.key === 'ArrowRight') {
+            player.dx = player.speed;
+        } else if (event.key === 'ArrowLeft') {
+            player.dx = -player.speed;
+        } else if (event.key === ' ') {
+            shootBullet();
+        }
+    }
+
+    // Handle key up event
+    function keyUpHandler(event) {
+        if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
+            player.dx = 0;
+        }
+    }
+
+    // Touch event handlers for mobile
+    function handleTouchStart(event) {
+        touchStartX = event.touches[0].clientX;
+    }
+
+    function handleTouchMove(event) {
+        const touchX = event.touches[0].clientX;
+        const dx = touchX - touchStartX;
+        player.x += dx / 10; // Adjust the movement sensitivity for mobile
+        touchStartX = touchX; // Update the starting point for the next move
+    }
+
+    // Update player position
+    function movePlayer() {
+        player.x += player.dx;
+        // Boundaries for the player
+        if (player.x < 0) player.x = 0;
+        if (player.x + player.width > canvas.width) player.x = canvas.width - player.width;
+    }
+
+    // Move bullets
+    function moveBullets() {
+        bullets.forEach((bullet, index) => {
+            bullet.y -= bulletSpeed;
+            // Remove bullet if it goes off screen
+            if (bullet.y + bullet.height < 0) {
+                bullets.splice(index, 1);
+            }
+        });
+    }
+
+    // Move enemies
+    function moveEnemies() {
+        enemies.forEach((enemy, index) => {
+            enemy.y += enemySpeed;
+            // End game if an enemy reaches the bottom
+            if (enemy.y + enemy.height > canvas.height) {
+                gameOver = true;
+            }
+        });
+    }
+
+    // Check for collisions between bullets and enemies
+    function checkCollisions() {
+        bullets.forEach((bullet, bulletIndex) => {
+            enemies.forEach((enemy, enemyIndex) => {
+                if (
+                    bullet.x < enemy.x + enemy.width &&
+                    bullet.x + bullet.width > enemy.x &&
+                    bullet.y < enemy.y + enemy.height &&
+                    bullet.height + bullet.y > enemy.y
+                ) {
+                    // Remove both the bullet and the enemy
+                    bullets.splice(bulletIndex, 1);
+                    enemies.splice(enemyIndex, 1);
+                    // Increase score
+                    score++;
+                    scoreDisplay.textContent = score;
+                }
+            });
+        });
+    }
+
+    // Draw player
+    function drawPlayer() {
+        ctx.fillStyle = '#00f';
+        ctx.fillRect(player.x, player.y, player.width, player.height);
+    }
+
+    // Draw bullets
+    function drawBullets() {
+        ctx.fillStyle = '#f00';
+        bullets.forEach(bullet => {
+            ctx.fillRect(bullet.x, bullet.y, bullet.width, bullet.height);
+        });
+    }
+
+    // Draw enemies
+    function drawEnemies() {
+        ctx.fillStyle = '#0f0';
+        enemies.forEach(enemy => {
+            ctx.fillRect(enemy.x, enemy.y, enemy.width, enemy.height);
+        });
+    }
+
+    // Clear the canvas
+    function clearCanvas() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-        // Draw paddles
-        ctx.fillStyle = '#fff';
-        ctx.fillRect(0, paddle1Y, paddleWidth, paddleHeight); // Paddle 1 (left)
-        ctx.fillRect(canvas.width - paddleWidth, paddle2Y, paddleWidth, paddleHeight); // Paddle 2 (right)
-
-        // Draw ball
-        ctx.beginPath();
-        ctx.arc(ballX, ballY, ballRadius, 0, Math.PI * 2);
-        ctx.fillStyle = '#fff';
-        ctx.fill();
-        ctx.closePath();
-
-        // Draw center line
-        ctx.setLineDash([5, 5]);
-        ctx.beginPath();
-        ctx.moveTo(canvas.width / 2, 0);
-        ctx.lineTo(canvas.width / 2, canvas.height);
-        ctx.strokeStyle = '#fff';
-        ctx.stroke();
     }
 
+    // Main game loop
     function gameLoop() {
-        if (!isGameOver) {
-            updateGame();
+        if (!gameOver) {
+            clearCanvas();
+            movePlayer();
+            moveBullets();
+            moveEnemies();
+            checkCollisions();
+            drawPlayer();
+            drawBullets();
+            drawEnemies();
+            requestAnimationFrame(gameLoop);
+        } else {
+            endGame();
         }
-        requestAnimationFrame(gameLoop);
     }
 
-    // Start the game loop
+    // End the game
+    function endGame() {
+        ctx.font = '30px Arial';
+        ctx.fillStyle = '#fff';
+        ctx.fillText('Game Over', canvas.width / 2 - 80, canvas.height / 2);
+    }
+
+    // Start the game
+    setInterval(createEnemy, 1000); // Spawn a new enemy every second
     gameLoop();
 </script>
 
